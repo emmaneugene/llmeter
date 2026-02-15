@@ -56,6 +56,8 @@ class UsageBar(Widget):
         t = Text()
         if self._label:
             t.append(f"  {self._label}: ", style="bold")
+        else:
+            t.append("  ", style="")
         t.append("[", style="dim")
         t.append("━" * filled, style=bar_style)
         t.append("─" * empty, style="dim")

@@ -24,6 +24,7 @@ class ProviderCard(Widget):
         border: round $secondary;
         background: $surface;
         margin-bottom: 1;
+        border-title-align: right;
     }
 
     ProviderCard:focus-within {
@@ -32,11 +33,6 @@ class ProviderCard(Widget):
 
     ProviderCard .card-body {
         height: auto;
-    }
-
-    ProviderCard .card-header {
-        text-style: bold;
-        margin-bottom: 1;
     }
 
     ProviderCard .card-meta {
@@ -56,11 +52,26 @@ class ProviderCard(Widget):
     ProviderCard .card-loading {
         color: $text-muted;
     }
+
+    ProviderCard .bar-label {
+        height: 1;
+    }
     """
 
     def __init__(self, data: ProviderResult, **kwargs) -> None:
         super().__init__(**kwargs)
         self.data = data
+
+    def on_mount(self) -> None:
+        d = self.data
+        version = f" {d.version}" if d.version else ""
+        display_name = (
+            f"{d.display_name}*"
+            if d.provider_id == "anthropic-api"
+            else d.display_name
+        )
+        self.border_title = f"{d.icon}  {display_name}{version}"
+        self.styles.border = ("round", d.color)
 
     @property
     def is_loading(self) -> bool:
@@ -73,19 +84,12 @@ class ProviderCard(Widget):
 
     def _build_children(self) -> ComposeResult:
         d = self.data
-        version = f" {d.version}" if d.version else ""
-        source = f" ({d.source})" if d.source and d.source not in ("unknown", "loading") else ""
-        display_name = f"{d.display_name}*" if d.provider_id == "anthropic-api" else d.display_name
 
-        yield Static(
-            Text.assemble(
-                (f" {d.icon} ", "bold"),
-                (display_name, "bold"),
-                (version, "dim"),
-                (source, "dim italic"),
-            ),
-            classes="card-header",
-        )
+        if d.source and d.source not in ("unknown", "loading"):
+            yield Static(
+                Text(f"  Source: {d.source}", style="dim italic"),
+                classes="card-meta",
+            )
 
         # Loading placeholder
         if self.is_loading:
@@ -105,30 +109,33 @@ class ProviderCard(Widget):
         with Vertical(classes="card-body"):
             # Primary window
             if d.primary:
-                yield UsageBar(
-                    used_percent=d.primary.used_percent,
-                    label=d.primary_label,
+                yield Static(
+                    Text(f"  {d.primary_label}:", style="bold"),
+                    classes="bar-label",
                 )
+                yield UsageBar(used_percent=d.primary.used_percent)
                 reset = d.primary.reset_text()
                 if reset:
                     yield Static(f"    {reset}", classes="reset-info")
 
             # Secondary window
             if d.secondary:
-                yield UsageBar(
-                    used_percent=d.secondary.used_percent,
-                    label=d.secondary_label,
+                yield Static(
+                    Text(f"  {d.secondary_label}:", style="bold"),
+                    classes="bar-label",
                 )
+                yield UsageBar(used_percent=d.secondary.used_percent)
                 reset = d.secondary.reset_text()
                 if reset:
                     yield Static(f"    {reset}", classes="reset-info")
 
             # Tertiary window
             if d.tertiary:
-                yield UsageBar(
-                    used_percent=d.tertiary.used_percent,
-                    label=d.tertiary_label,
+                yield Static(
+                    Text(f"  {d.tertiary_label}:", style="bold"),
+                    classes="bar-label",
                 )
+                yield UsageBar(used_percent=d.tertiary.used_percent)
                 reset = d.tertiary.reset_text()
                 if reset:
                     yield Static(f"    {reset}", classes="reset-info")
@@ -151,12 +158,12 @@ class ProviderCard(Widget):
                     cost_pct = min(100.0, (cost.used / cost.limit) * 100.0)
                 else:
                     cost_pct = 0.0
-                cost_label = f"💰 ${cost.used:,.2f}/${cost.limit:,.2f} {cost.currency}"
-                yield UsageBar(
-                    used_percent=cost_pct,
-                    label=cost_label,
-                    suffix=f"({cost.period})",
+                cost_label = f"Extra ({cost.period}) ${cost.used:,.2f} / ${cost.limit:,.2f}"
+                yield Static(
+                    Text(f"  {cost_label}:", style="bold"),
+                    classes="bar-label",
                 )
+                yield UsageBar(used_percent=cost_pct)
 
             # Identity metadata
             if d.identity:
@@ -181,14 +188,3 @@ class ProviderCard(Widget):
                         ),
                         classes="card-meta",
                     )
-
-            # Updated timestamp (shown in local timezone to match header clock)
-            if d.updated_at:
-                local_dt = d.updated_at.astimezone()
-                ts = local_dt.strftime("%H:%M:%S")
-                tz = local_dt.strftime("%Z")
-                suffix = f" {tz}" if tz else ""
-                yield Static(
-                    Text(f"  Updated at {ts}{suffix}", style="dim italic"),
-                    classes="card-meta",
-                )

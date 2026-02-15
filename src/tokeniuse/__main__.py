@@ -146,8 +146,7 @@ def _run_one_shot(config) -> None:
 
     for p in results:
         version = f" {p.version}" if p.version else ""
-        source = f" ({p.source})" if p.source != "unknown" else ""
-        title = f"{p.icon}  {p.display_name}{version}{source}"
+        title = f"{p.icon}  {p.display_name}{version}"
 
         if p.error:
             console.print(Panel(
@@ -159,10 +158,14 @@ def _run_one_shot(config) -> None:
 
         lines: list[str] = []
 
+        if p.source and p.source not in ("unknown", "loading"):
+            lines.append(f"  [dim italic]Source: {p.source}[/dim italic]")
+
         if p.primary:
             pct = p.primary.used_percent
             bar = _rich_bar(pct)
-            lines.append(f"  {p.primary_label}: {bar} {pct:3.0f}% used")
+            lines.append(f"  [bold]{p.primary_label}:[/bold]")
+            lines.append(f"  {bar} {pct:3.0f}% used")
             reset = p.primary.reset_text()
             if reset:
                 lines.append(f"    [dim]{reset}[/dim]")
@@ -170,7 +173,8 @@ def _run_one_shot(config) -> None:
         if p.secondary:
             pct = p.secondary.used_percent
             bar = _rich_bar(pct)
-            lines.append(f"  {p.secondary_label}: {bar} {pct:3.0f}% used")
+            lines.append(f"  [bold]{p.secondary_label}:[/bold]")
+            lines.append(f"  {bar} {pct:3.0f}% used")
             reset = p.secondary.reset_text()
             if reset:
                 lines.append(f"    [dim]{reset}[/dim]")
@@ -178,7 +182,8 @@ def _run_one_shot(config) -> None:
         if p.tertiary:
             pct = p.tertiary.used_percent
             bar = _rich_bar(pct)
-            lines.append(f"  {p.tertiary_label}: {bar} {pct:3.0f}% used")
+            lines.append(f"  [bold]{p.tertiary_label}:[/bold]")
+            lines.append(f"  {bar} {pct:3.0f}% used")
             reset = p.tertiary.reset_text()
             if reset:
                 lines.append(f"    [dim]{reset}[/dim]")
@@ -195,9 +200,9 @@ def _run_one_shot(config) -> None:
                 cost_pct = 0.0
             bar = _rich_bar(cost_pct)
             lines.append(
-                f"  💰 ${cost.used:,.2f}/${cost.limit:,.2f} {cost.currency}: "
-                f"{bar} {cost_pct:3.0f}% ({cost.period})"
+                f"  [bold]Extra ({cost.period}) ${cost.used:,.2f} / ${cost.limit:,.2f}:[/bold]"
             )
+            lines.append(f"  {bar} {cost_pct:3.0f}% used")
 
         if p.identity:
             if p.identity.account_email:
