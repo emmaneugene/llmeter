@@ -35,12 +35,41 @@ def main() -> None:
         action="store_true",
         help="Create a default config file and exit.",
     )
+    parser.add_argument(
+        "--login-claude",
+        action="store_true",
+        help="Authenticate with Claude via OAuth (one-time setup).",
+    )
+    parser.add_argument(
+        "--logout-claude",
+        action="store_true",
+        help="Remove stored Claude OAuth credentials.",
+    )
 
     args = parser.parse_args()
 
     if args.init_config:
         from .config import init_config
         init_config()
+        return
+
+    if args.login_claude:
+        from .providers.claude_oauth import interactive_login
+        try:
+            interactive_login()
+        except (RuntimeError, KeyboardInterrupt) as e:
+            print(f"Login failed: {e}", file=sys.stderr)
+            sys.exit(1)
+        return
+
+    if args.logout_claude:
+        from .providers.claude_oauth import clear_credentials, _creds_path
+        path = _creds_path()
+        if path.exists():
+            clear_credentials()
+            print(f"✓ Removed Claude credentials from {path}")
+        else:
+            print("No Claude credentials stored.")
         return
 
     from .config import load_config

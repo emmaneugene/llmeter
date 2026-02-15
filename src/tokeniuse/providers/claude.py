@@ -1,9 +1,21 @@
-"""Claude provider — fetches usage via OAuth API or credentials file."""
+"""Claude provider — fetches usage via OAuth API with automatic token refresh.
+
+Credential resolution order:
+1. tokeniuse's own OAuth credentials (~/.config/tokeniuse/claude_oauth.json)
+   — supports automatic token refresh via refresh_token
+2. Environment variable override (CODEXBAR_CLAUDE_OAUTH_TOKEN)
+3. Claude Code CLI credentials (~/.claude/.credentials.json or macOS Keychain)
+   — read-only fallback, cannot auto-refresh
+
+Run `tokeniuse --login-claude` to authenticate once.  Tokens are refreshed
+automatically from then on.
+"""
 
 from __future__ import annotations
 
 import json
 import os
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -16,6 +28,7 @@ from ..models import (
     ProviderResult,
     RateWindow,
 )
+from . import claude_oauth
 
 OAUTH_USAGE_URL = "https://api.anthropic.com/api/oauth/usage"
 BETA_HEADER = "oauth-2025-04-20"
@@ -33,36 +46,28 @@ async def fetch_claude(timeout: float = 30.0, settings: dict | None = None) -> P
         tertiary_label="Sonnet",
     )
 
-    # Load credentials
-    creds = _load_credentials()
-    if creds is None:
-        result.error = "Claude OAuth credentials not found. Run `claude` to authenticate."
-        return result
+    # --- Resolve an access token ---
+    access_token, source, tier = await _resolve_access_token(timeout=timeout)
 
-    access_token = creds.get("access_token", "")
     if not access_token:
-        result.error = "Claude OAuth access token missing. Run `claude` to authenticate."
+        result.error = (
+            "No Claude credentials found. "
+            "Run `tokeniuse --login-claude` to authenticate."
+        )
         return result
 
-    # Check expiry
-    expires_at = creds.get("expires_at")
-    if expires_at:
-        try:
-            exp_dt = datetime.fromtimestamp(expires_at / 1000.0, tz=timezone.utc)
-            if datetime.now(timezone.utc) >= exp_dt:
-                result.error = "Claude OAuth token expired. Run `claude login` to refresh."
-                return result
-        except (ValueError, TypeError, OSError):
-            pass
-
-    # Fetch usage
+    # --- Fetch usage ---
     try:
         usage = await _fetch_oauth_usage(access_token, timeout=timeout)
     except Exception as e:
-        result.error = f"Claude API error: {e}"
+        error_msg = str(e)
+        # If we got a 401 using legacy creds, nudge toward own login
+        if "Unauthorized" in error_msg and source == "legacy":
+            error_msg += " Run `tokeniuse --login-claude` for auto-refreshing auth."
+        result.error = f"Claude API error: {error_msg}"
         return result
 
-    # Parse five_hour (primary)
+    # --- Parse windows ---
     five_hour = usage.get("five_hour")
     if five_hour and five_hour.get("utilization") is not None:
         result.primary = RateWindow(
@@ -74,7 +79,6 @@ async def fetch_claude(timeout: float = 30.0, settings: dict | None = None) -> P
         result.error = "Claude API returned no session usage data."
         return result
 
-    # Parse seven_day (secondary)
     seven_day = usage.get("seven_day")
     if seven_day and seven_day.get("utilization") is not None:
         result.secondary = RateWindow(
@@ -83,7 +87,6 @@ async def fetch_claude(timeout: float = 30.0, settings: dict | None = None) -> P
             resets_at=_parse_iso8601(seven_day.get("resets_at")),
         )
 
-    # Parse model-specific (tertiary): sonnet or opus
     for key in ("seven_day_sonnet", "seven_day_opus"):
         model_window = usage.get(key)
         if model_window and model_window.get("utilization") is not None:
@@ -101,35 +104,74 @@ async def fetch_claude(timeout: float = 30.0, settings: dict | None = None) -> P
         used = extra.get("used_credits")
         limit = extra.get("monthly_limit")
         if used is not None and limit is not None:
-            # API returns cents; convert to dollars
             result.cost = CostInfo(
                 used=used / 100.0,
                 limit=limit / 100.0,
                 currency=extra.get("currency", "USD") or "USD",
             )
 
-    # Infer plan from rate_limit_tier
-    tier = creds.get("rate_limit_tier", "")
+    # Infer plan from rate_limit_tier (legacy only)
     if tier:
         result.identity = ProviderIdentity(login_method=_infer_plan(tier))
 
-    result.source = "oauth"
+    result.source = f"oauth ({source})"
     result.updated_at = datetime.now(timezone.utc)
     return result
 
 
-def _load_credentials() -> Optional[dict]:
-    """Load Claude OAuth credentials from environment, file, or macOS Keychain."""
-    # 1. Environment variable override
+# ── Token resolution ───────────────────────────────────────
+
+async def _resolve_access_token(
+    timeout: float = 30.0,
+) -> tuple[Optional[str], str, Optional[str]]:
+    """Try to get a valid access token.
+
+    Returns (access_token, source_label, rate_limit_tier).
+    source_label is one of: "own", "env", "legacy".
+    """
+    # 1. tokeniuse's own OAuth credentials (with auto-refresh)
+    own_creds = claude_oauth.load_credentials()
+    if own_creds:
+        if claude_oauth.is_token_expired(own_creds):
+            try:
+                own_creds = await claude_oauth.refresh_access_token(own_creds, timeout=timeout)
+            except RuntimeError:
+                # Refresh failed — fall through to legacy sources
+                own_creds = None
+        if own_creds and own_creds.get("access_token"):
+            return own_creds["access_token"], "own", None
+
+    # 2. Environment variable override
     env_token = os.environ.get("CODEXBAR_CLAUDE_OAUTH_TOKEN")
     if env_token:
-        scopes_raw = os.environ.get("CODEXBAR_CLAUDE_OAUTH_SCOPES", "user:profile")
-        return {
-            "access_token": env_token,
-            "scopes": scopes_raw.split(","),
-        }
+        return env_token, "env", None
 
-    # 2. Credentials file: ~/.claude/.credentials.json
+    # 3. Legacy: Claude Code CLI credentials (read-only, no refresh)
+    legacy = _load_legacy_credentials()
+    if legacy:
+        token = legacy.get("access_token", "")
+        if token:
+            # Check expiry — warn but still try (might work for a bit)
+            expires_at = legacy.get("expires_at")
+            if expires_at:
+                try:
+                    exp_ms = float(expires_at)
+                    if claude_oauth._now_ms() >= exp_ms:
+                        # Expired legacy token — still return it so the caller
+                        # can show a more specific "Unauthorized" error
+                        return token, "legacy", legacy.get("rate_limit_tier")
+                except (ValueError, TypeError):
+                    pass
+            return token, "legacy", legacy.get("rate_limit_tier")
+
+    return None, "", None
+
+
+# ── Legacy credential loading (unchanged) ──────────────────
+
+def _load_legacy_credentials() -> Optional[dict]:
+    """Load Claude OAuth credentials from Claude Code CLI files."""
+    # Credentials file: ~/.claude/.credentials.json
     creds_path = Path.home() / ".claude" / ".credentials.json"
     if creds_path.exists():
         try:
@@ -140,7 +182,7 @@ def _load_credentials() -> Optional[dict]:
         except (json.JSONDecodeError, OSError):
             pass
 
-    # 3. macOS Keychain: "Claude Code-credentials"
+    # macOS Keychain: "Claude Code-credentials"
     keychain_data = _load_from_keychain()
     if keychain_data:
         try:
@@ -175,7 +217,6 @@ def _parse_credentials_json(data: dict) -> Optional[dict]:
 
 def _load_from_keychain() -> Optional[str]:
     """Try to load Claude credentials from macOS Keychain."""
-    import sys
     if sys.platform != "darwin":
         return None
 
@@ -194,6 +235,8 @@ def _load_from_keychain() -> Optional[str]:
     return None
 
 
+# ── API call ───────────────────────────────────────────────
+
 async def _fetch_oauth_usage(access_token: str, timeout: float = 30.0) -> dict:
     """Call the Claude OAuth usage endpoint."""
     headers = {
@@ -211,13 +254,13 @@ async def _fetch_oauth_usage(access_token: str, timeout: float = 30.0) -> dict:
             timeout=aiohttp.ClientTimeout(total=timeout),
         ) as resp:
             if resp.status == 401:
-                raise RuntimeError("Unauthorized — run `claude login` to re-authenticate.")
+                raise RuntimeError("Unauthorized — token may be invalid or expired.")
             if resp.status == 403:
                 body = await resp.text()
                 if "user:profile" in body:
                     raise RuntimeError(
                         "Token missing 'user:profile' scope. "
-                        "Run `claude setup-token` to re-generate."
+                        "Re-authenticate with `tokeniuse --login-claude`."
                     )
                 raise RuntimeError(f"Forbidden (HTTP 403): {body[:200]}")
             if resp.status != 200:
@@ -225,6 +268,8 @@ async def _fetch_oauth_usage(access_token: str, timeout: float = 30.0) -> dict:
                 raise RuntimeError(f"HTTP {resp.status}: {body[:200]}")
             return await resp.json()
 
+
+# ── Helpers ────────────────────────────────────────────────
 
 def _parse_iso8601(s: str | None) -> Optional[datetime]:
     """Parse an ISO 8601 datetime string."""
