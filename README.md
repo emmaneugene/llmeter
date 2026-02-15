@@ -6,7 +6,7 @@ Built with [Textual](https://textual.textualize.io/) and [aiohttp](https://docs.
 
 ## Features
 
-- **5 providers** — Codex, Claude, Gemini CLI quotas + OpenAI & Anthropic API billing
+- **Multiple providers** — Codex, Claude, Gemini CLI quotas, OpenAI & Anthropic API billing
 - **Config-driven** — JSON config controls which providers are shown and in what order
 - **Live dashboard** — Color-coded usage bars with reset countdowns, auto-refreshing
 - **One-shot mode** — Non-interactive Rich-formatted output for scripts and CI
@@ -18,7 +18,7 @@ Built with [Textual](https://textual.textualize.io/) and [aiohttp](https://docs.
 
 | Provider | ID | How it works | Auth |
 |----------|----|-------------|------|
-| **Codex** | `codex` | JSON-RPC to `codex app-server` | Codex CLI login |
+| **Codex** | `codex` | OAuth API (`chatgpt.com/backend-api/api/codex/usage`) | `tokeniuse --login-codex` (one-time OAuth) |
 | **Claude** | `claude` | OAuth API (`api.anthropic.com/api/oauth/usage`) | `tokeniuse --login-claude` (one-time OAuth) |
 | **Gemini** | `gemini` | Google Cloud Code quota API | `~/.gemini/oauth_creds.json` (Gemini CLI login) |
 
@@ -32,7 +32,7 @@ Built with [Textual](https://textual.textualize.io/) and [aiohttp](https://docs.
 ## Prerequisites
 
 - Python 3.11+
-- **Codex**: `codex` CLI installed and logged in (`npm i -g @openai/codex`)
+- **Codex**: Run `tokeniuse --login-codex` once (or have `codex` CLI installed as fallback)
 - **Claude**: Run `tokeniuse --login-claude` once (or have `claude` CLI logged in as fallback)
 - **Gemini**: `gemini` CLI installed and logged in with Google OAuth
 - **OpenAI API**: Admin API key from [platform.openai.com/settings/organization/admin-keys](https://platform.openai.com/settings/organization/admin-keys)
@@ -88,7 +88,7 @@ tokeniuse --init-config
     { "id": "codex" },
     { "id": "claude" },
     { "id": "gemini" },
-    { "id": "openai-api", "api_key": "sk-admin-...", "monthly_budget": 100.0 },
+    { "id": "openai-api", "api_key": "sk-admin-...", "monthly_budget": 50.0 },
     { "id": "anthropic-api", "api_key": "sk-ant-admin01-...", "monthly_budget": 50.0 }
   ],
   "refresh_interval": 120
@@ -130,21 +130,23 @@ tokeniuse
 tokeniuse --one-shot
 ```
 
-### Claude authentication
+### Authentication
 
-Authenticate once — tokens are refreshed automatically from then on:
+Both Codex and Claude support one-time OAuth login with automatic token refresh:
 
 ```bash
-tokeniuse --login-claude
+tokeniuse --login-codex    # OpenAI Codex (ChatGPT)
+tokeniuse --login-claude   # Anthropic Claude
 ```
 
-This opens your browser for Anthropic OAuth, stores credentials in `~/.config/tokeniuse/claude_oauth.json`, and auto-refreshes them on each run. No need to re-authenticate unless you explicitly log out:
+This opens your browser, stores credentials in `~/.config/tokeniuse/`, and auto-refreshes tokens on each run. No need to re-authenticate unless you explicitly log out:
 
 ```bash
+tokeniuse --logout-codex
 tokeniuse --logout-claude
 ```
 
-> **Fallback:** If you don't run `--login-claude`, tokeniuse will try reading credentials from the Claude Code CLI (`~/.claude/.credentials.json` or macOS Keychain), but these cannot be auto-refreshed and will eventually expire.
+> **Fallback:** If you don't run `--login-codex`, tokeniuse falls back to JSON-RPC via the `codex` binary. If you don't run `--login-claude`, it tries reading credentials from the Claude Code CLI (`~/.claude/.credentials.json` or macOS Keychain), but those cannot be auto-refreshed.
 
 ### All options
 
@@ -154,6 +156,8 @@ tokeniuse [options]
   --refresh SECONDS  Auto-refresh interval (overrides config)
   --one-shot         Print once and exit (Rich-formatted)
   --init-config      Create a default config file and exit
+  --login-codex      Authenticate with Codex via OAuth (one-time setup)
+  --logout-codex     Remove stored Codex OAuth credentials
   --login-claude     Authenticate with Claude via OAuth (one-time setup)
   --logout-claude    Remove stored Claude OAuth credentials
   -V, --version      Show version
@@ -179,7 +183,8 @@ src/tokeniuse/
 ├── config.py                # JSON config loading
 ├── models.py                # Shared data models
 ├── providers/
-│   ├── codex.py             # Codex: JSON-RPC over stdin/stdout
+│   ├── codex.py             # Codex: direct API + JSON-RPC fallback
+│   ├── codex_oauth.py       # Codex: PKCE OAuth login + token refresh
 │   ├── claude.py            # Claude: OAuth usage API + credential resolution
 │   ├── claude_oauth.py      # Claude: PKCE OAuth login + token refresh
 │   ├── gemini.py            # Gemini: Google Cloud Code quota API

@@ -45,6 +45,16 @@ def main() -> None:
         action="store_true",
         help="Remove stored Claude OAuth credentials.",
     )
+    parser.add_argument(
+        "--login-codex",
+        action="store_true",
+        help="Authenticate with Codex via OAuth (one-time setup).",
+    )
+    parser.add_argument(
+        "--logout-codex",
+        action="store_true",
+        help="Remove stored Codex OAuth credentials.",
+    )
 
     args = parser.parse_args()
 
@@ -70,6 +80,25 @@ def main() -> None:
             print(f"✓ Removed Claude credentials from {path}")
         else:
             print("No Claude credentials stored.")
+        return
+
+    if args.login_codex:
+        from .providers.codex_oauth import interactive_login
+        try:
+            interactive_login()
+        except (RuntimeError, KeyboardInterrupt) as e:
+            print(f"Login failed: {e}", file=sys.stderr)
+            sys.exit(1)
+        return
+
+    if args.logout_codex:
+        from .providers.codex_oauth import clear_credentials, _creds_path
+        path = _creds_path()
+        if path.exists():
+            clear_credentials()
+            print(f"✓ Removed Codex credentials from {path}")
+        else:
+            print("No Codex credentials stored.")
         return
 
     from .config import load_config
