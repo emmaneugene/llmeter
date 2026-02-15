@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timezone
+from datetime import datetime
 
 from rich.text import Text
 from textual import work
@@ -108,9 +108,31 @@ class TokenIUseApp(App):
             yield Vertical(id="provider-list")
         yield Footer()
 
+    def _refresh_interval_text(self) -> str:
+        interval = float(self._config.refresh_interval)
+        if not interval.is_integer():
+            return f"{interval:g}s"
+
+        total_seconds = int(interval)
+        if total_seconds < 60:
+            return f"{total_seconds}s"
+
+        minutes, seconds = divmod(total_seconds, 60)
+        hours, minutes = divmod(minutes, 60)
+
+        parts: list[str] = []
+        if hours:
+            parts.append(f"{hours}h")
+        if minutes:
+            parts.append(f"{minutes}min")
+        if seconds:
+            parts.append(f"{seconds}s")
+
+        return " ".join(parts) if parts else "0s"
+
     async def on_mount(self) -> None:
         interval = self._config.refresh_interval
-        self.sub_title = f"v{__version__}  •  refresh every {int(interval)}s"
+        self.sub_title = f"v{__version__}  •  refresh every {self._refresh_interval_text()}"
 
         # Mount placeholder cards immediately
         container = self.query_one("#provider-list", Vertical)
@@ -191,7 +213,7 @@ class TokenIUseApp(App):
                     self._refresh_all()
 
     def _update_status(self, message: str | None = None) -> None:
-        parts = [f"v{__version__}"]
+        parts = [f"v{__version__}", f"Every {self._refresh_interval_text()}"]
 
         if message and not self._providers:
             # First load — show "Refreshing…"
@@ -203,7 +225,7 @@ class TokenIUseApp(App):
             if loaded < total:
                 parts.append(f"Loading {loaded}/{total}")
             else:
-                now = datetime.now(timezone.utc)
+                now = datetime.now().astimezone()
                 self._last_refresh = now
                 parts.append(f"Last: {now.strftime('%H:%M:%S')}")
 

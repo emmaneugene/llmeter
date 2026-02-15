@@ -181,10 +181,13 @@ class ProviderCard(Widget):
                         classes="card-meta",
                     )
 
-            # Updated timestamp
+            # Updated timestamp (shown in local timezone to match header clock)
             if d.updated_at:
-                ts = d.updated_at.strftime("%H:%M:%S UTC")
+                local_dt = d.updated_at.astimezone()
+                ts = local_dt.strftime("%H:%M:%S")
+                tz = local_dt.strftime("%Z")
+                suffix = f" {tz}" if tz else ""
                 yield Static(
-                    Text(f"  Updated at {ts}", style="dim italic"),
+                    Text(f"  Updated at {ts}{suffix}", style="dim italic"),
                     classes="card-meta",
                 )
