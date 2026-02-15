@@ -10,7 +10,6 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
-import os
 import secrets
 import time
 from http.server import HTTPServer, BaseHTTPRequestHandler
@@ -20,6 +19,8 @@ from typing import Optional
 from urllib.parse import urlencode, urlparse, parse_qs
 
 import aiohttp
+
+from .helpers import config_dir, decode_jwt_payload
 
 # OAuth constants (same OpenAI Codex OAuth app as Codex CLI / pi-mono)
 CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann"
@@ -40,9 +41,7 @@ USAGE_URL = "https://chatgpt.com/backend-api/api/codex/usage"
 
 def _creds_path() -> Path:
     """Path to llmeter's own Codex OAuth credentials file."""
-    xdg = os.environ.get("XDG_CONFIG_HOME", "")
-    base = Path(xdg) if xdg else Path.home() / ".config"
-    return base / "llmeter" / "codex_oauth.json"
+    return config_dir("codex_oauth.json")
 
 
 # ── PKCE helpers ───────────────────────────────────────────
@@ -55,28 +54,9 @@ def _generate_pkce() -> tuple[str, str]:
     return verifier, challenge
 
 
-# ── JWT decoding ───────────────────────────────────────────
-
-def _decode_jwt_payload(token: str) -> Optional[dict]:
-    """Decode a JWT payload (no verification)."""
-    try:
-        parts = token.split(".")
-        if len(parts) != 3:
-            return None
-        payload = parts[1]
-        # Add padding
-        padding = 4 - len(payload) % 4
-        if padding != 4:
-            payload += "=" * padding
-        decoded = base64.urlsafe_b64decode(payload)
-        return json.loads(decoded)
-    except Exception:
-        return None
-
-
 def extract_account_id(access_token: str) -> Optional[str]:
     """Extract the chatgpt_account_id from an OpenAI access token JWT."""
-    payload = _decode_jwt_payload(access_token)
+    payload = decode_jwt_payload(access_token)
     if not payload:
         return None
     auth_claim = payload.get(JWT_CLAIM_PATH)

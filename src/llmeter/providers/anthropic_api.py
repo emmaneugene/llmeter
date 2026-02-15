@@ -20,6 +20,7 @@ import aiohttp
 
 from ..models import (
     CostInfo,
+    PROVIDERS,
     ProviderIdentity,
     ProviderResult,
     RateWindow,
@@ -37,14 +38,7 @@ async def fetch_anthropic_api(
     """Fetch Anthropic API cost report for the current billing month."""
     settings = settings or {}
 
-    result = ProviderResult(
-        provider_id="anthropic-api",
-        display_name="Anthropic API",
-        icon="◈",
-        color="#d4a27f",
-        primary_label="Spend",
-        source="admin-api",
-    )
+    result = PROVIDERS["anthropic-api"].to_result(source="admin-api")
 
     # Resolve API key — prefer admin key
     api_key = (

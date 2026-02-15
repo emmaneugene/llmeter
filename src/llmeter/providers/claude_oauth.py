@@ -17,6 +17,8 @@ from typing import Optional
 
 import aiohttp
 
+from .helpers import config_dir
+
 # OAuth constants — Anthropic's shared public OAuth client ID,
 # used by Claude Code CLI, pi-mono, and llmeter alike.
 _CLIENT_ID_B64 = "OWQxYzI1MGEtZTYxYi00NGQ5LTg4ZWQtNTk0NGQxOTYyZjVl"
@@ -32,9 +34,7 @@ _EXPIRY_BUFFER_MS = 5 * 60 * 1000
 
 def _creds_path() -> Path:
     """Path to llmeter's own Claude OAuth credentials file."""
-    xdg = os.environ.get("XDG_CONFIG_HOME", "")
-    base = Path(xdg) if xdg else Path.home() / ".config"
-    return base / "llmeter" / "claude_oauth.json"
+    return config_dir("claude_oauth.json")
 
 
 # ── PKCE helpers ───────────────────────────────────────────

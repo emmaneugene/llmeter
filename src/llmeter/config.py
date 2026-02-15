@@ -22,9 +22,10 @@ Provider-specific settings (api_key, monthly_budget, etc.) are passed through.
 from __future__ import annotations
 
 import json
-import os
 from dataclasses import dataclass, field
 from pathlib import Path
+
+from .providers.helpers import config_dir
 
 
 @dataclass
@@ -80,10 +81,7 @@ class AppConfig:
 
 def config_path() -> Path:
     """Return the config file path, preferring XDG."""
-    xdg = os.environ.get("XDG_CONFIG_HOME", "")
-    if xdg:
-        return Path(xdg) / "llmeter" / "config.json"
-    return Path.home() / ".config" / "llmeter" / "config.json"
+    return config_dir("config.json")
 
 
 def load_config() -> AppConfig:
