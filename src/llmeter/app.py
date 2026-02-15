@@ -36,7 +36,7 @@ Configure providers in ~/.config/llmeter/config.json[/]
 [dim]Press [bold]Escape[/bold] to close this dialog.[/]
 """
 
-DELAY_DISCLAIMER = "* May not reflect current usage due to reporting delays"
+DELAY_DISCLAIMER = "* May have reporting delays"
 DELAY_PRONE_PROVIDER_IDS = {
     "anthropic-api",
 }

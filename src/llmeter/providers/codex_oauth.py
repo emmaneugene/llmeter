@@ -2,7 +2,7 @@
 
 Implements the same PKCE-based OAuth flow that Codex CLI / pi-mono uses,
 with a local HTTP callback server on port 1455.  Credentials are stored
-in ~/.config/llmeter/codex_oauth.json.
+in the unified ~/.config/llmeter/auth.json under "openai-codex".
 """
 
 from __future__ import annotations
@@ -20,7 +20,8 @@ from urllib.parse import urlencode, urlparse, parse_qs
 
 import aiohttp
 
-from .helpers import config_dir, decode_jwt_payload
+from .. import auth
+from .helpers import decode_jwt_payload
 
 # OAuth constants (same OpenAI Codex OAuth app as Codex CLI / pi-mono)
 CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann"
@@ -32,16 +33,14 @@ SCOPES = "openid profile email offline_access"
 # JWT claim path for account ID
 JWT_CLAIM_PATH = "https://api.openai.com/auth"
 
+PROVIDER_ID = "openai-codex"
+
 # 5-minute safety buffer before actual expiry
 _EXPIRY_BUFFER_MS = 5 * 60 * 1000
 
-# Usage API
-USAGE_URL = "https://chatgpt.com/backend-api/api/codex/usage"
 
-
-def _creds_path() -> Path:
-    """Path to llmeter's own Codex OAuth credentials file."""
-    return config_dir("codex_oauth.json")
+def _now_ms() -> int:
+    return int(time.time() * 1000)
 
 
 # ── PKCE helpers ───────────────────────────────────────────
@@ -67,52 +66,32 @@ def extract_account_id(access_token: str) -> Optional[str]:
     return None
 
 
-# ── Credential persistence ─────────────────────────────────
+# ── Credential persistence (unified auth.json) ────────────
 
 def load_credentials() -> Optional[dict]:
-    """Load llmeter's own Codex OAuth credentials from disk.
+    """Load Codex OAuth credentials from the unified auth store.
 
-    Returns dict with keys: access_token, refresh_token, expires_at (ms epoch),
-    account_id.
+    Returns dict with keys: access, refresh, expires (ms epoch), accountId.
     """
-    path = _creds_path()
-    if not path.exists():
-        return None
-    try:
-        data = json.loads(path.read_text())
-        if data.get("access_token") and data.get("refresh_token") and data.get("account_id"):
-            return data
-    except (json.JSONDecodeError, OSError):
-        pass
+    creds = auth.load_provider(PROVIDER_ID)
+    if creds and creds.get("access") and creds.get("refresh") and creds.get("accountId"):
+        return creds
     return None
 
 
 def save_credentials(creds: dict) -> None:
-    """Persist credentials to disk with restricted permissions."""
-    path = _creds_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(creds, indent=2) + "\n")
-    try:
-        path.chmod(0o600)
-    except OSError:
-        pass
+    """Persist credentials to the unified auth store."""
+    auth.save_provider(PROVIDER_ID, creds)
 
 
 def clear_credentials() -> None:
     """Remove stored credentials."""
-    path = _creds_path()
-    if path.exists():
-        path.unlink()
+    auth.clear_provider(PROVIDER_ID)
 
 
 def is_token_expired(creds: dict) -> bool:
     """Check if the access token has expired (with buffer)."""
-    expires_at = creds.get("expires_at", 0)
-    return _now_ms() >= expires_at
-
-
-def _now_ms() -> int:
-    return int(time.time() * 1000)
+    return auth.is_expired(creds)
 
 
 # ── Local OAuth callback server ────────────────────────────
@@ -164,10 +143,7 @@ class _OAuthCallbackHandler(BaseHTTPRequestHandler):
 
 
 def _start_callback_server(state: str) -> tuple[Optional[HTTPServer], Event]:
-    """Start a local HTTP server on port 1455 to receive the OAuth callback.
-
-    Returns (server, code_event).  server is None if the port is unavailable.
-    """
+    """Start a local HTTP server on port 1455 to receive the OAuth callback."""
     code_event = Event()
     _OAuthCallbackHandler.received_code = None
     _OAuthCallbackHandler.expected_state = state
@@ -243,7 +219,7 @@ def interactive_login() -> dict:
     # Exchange code for tokens
     creds = _exchange_code_sync(code, verifier)
     save_credentials(creds)
-    print(f"✓ Codex OAuth credentials saved to {_creds_path()}")
+    print(f"✓ Codex OAuth credentials saved to {auth._auth_path()}")
     return creds
 
 
@@ -314,10 +290,11 @@ def _exchange_code_sync(code: str, verifier: str) -> dict:
         raise RuntimeError("Failed to extract accountId from access token.")
 
     return {
-        "access_token": access_token,
-        "refresh_token": refresh_token,
-        "expires_at": _now_ms() + int(expires_in) * 1000 - _EXPIRY_BUFFER_MS,
-        "account_id": account_id,
+        "type": "oauth",
+        "access": access_token,
+        "refresh": refresh_token,
+        "expires": _now_ms() + int(expires_in) * 1000 - _EXPIRY_BUFFER_MS,
+        "accountId": account_id,
     }
 
 
@@ -329,7 +306,7 @@ async def refresh_access_token(creds: dict, timeout: float = 30.0) -> dict:
     Updates and persists the credentials on success.
     Raises RuntimeError on failure.
     """
-    refresh_token = creds.get("refresh_token")
+    refresh_token = creds.get("refresh")
     if not refresh_token:
         raise RuntimeError("No refresh token available — run `llmeter --login-codex`.")
 
@@ -360,13 +337,14 @@ async def refresh_access_token(creds: dict, timeout: float = 30.0) -> dict:
     if not access_token or not isinstance(expires_in, (int, float)):
         raise RuntimeError("Token refresh response missing required fields.")
 
-    account_id = extract_account_id(access_token) or creds.get("account_id")
+    account_id = extract_account_id(access_token) or creds.get("accountId")
 
     new_creds = {
-        "access_token": access_token,
-        "refresh_token": new_refresh,
-        "expires_at": _now_ms() + int(expires_in) * 1000 - _EXPIRY_BUFFER_MS,
-        "account_id": account_id,
+        "type": "oauth",
+        "access": access_token,
+        "refresh": new_refresh,
+        "expires": _now_ms() + int(expires_in) * 1000 - _EXPIRY_BUFFER_MS,
+        "accountId": account_id,
     }
 
     save_credentials(new_creds)
@@ -378,7 +356,7 @@ async def refresh_access_token(creds: dict, timeout: float = 30.0) -> dict:
 async def get_valid_credentials(timeout: float = 30.0) -> Optional[dict]:
     """Load credentials, refresh if expired, return full creds dict or None.
 
-    Returns dict with access_token and account_id on success.
+    Returns dict with access and accountId on success.
     """
     creds = load_credentials()
     if creds is None:

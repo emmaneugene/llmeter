@@ -55,7 +55,16 @@ def main() -> None:
         action="store_true",
         help="Remove stored Codex OAuth credentials.",
     )
-
+    parser.add_argument(
+        "--login-gemini",
+        action="store_true",
+        help="Authenticate with Gemini via Google OAuth (one-time setup).",
+    )
+    parser.add_argument(
+        "--logout-gemini",
+        action="store_true",
+        help="Remove stored Gemini OAuth credentials.",
+    )
     args = parser.parse_args()
 
     if args.init_config:
@@ -73,11 +82,10 @@ def main() -> None:
         return
 
     if args.logout_claude:
-        from .providers.claude_oauth import clear_credentials, _creds_path
-        path = _creds_path()
-        if path.exists():
+        from .providers.claude_oauth import clear_credentials, load_credentials
+        if load_credentials():
             clear_credentials()
-            print(f"✓ Removed Claude credentials from {path}")
+            print("✓ Removed Claude credentials.")
         else:
             print("No Claude credentials stored.")
         return
@@ -92,13 +100,30 @@ def main() -> None:
         return
 
     if args.logout_codex:
-        from .providers.codex_oauth import clear_credentials, _creds_path
-        path = _creds_path()
-        if path.exists():
+        from .providers.codex_oauth import clear_credentials, load_credentials
+        if load_credentials():
             clear_credentials()
-            print(f"✓ Removed Codex credentials from {path}")
+            print("✓ Removed Codex credentials.")
         else:
             print("No Codex credentials stored.")
+        return
+
+    if args.login_gemini:
+        from .providers.gemini_oauth import interactive_login
+        try:
+            interactive_login()
+        except (RuntimeError, KeyboardInterrupt) as e:
+            print(f"Login failed: {e}", file=sys.stderr)
+            sys.exit(1)
+        return
+
+    if args.logout_gemini:
+        from .providers.gemini_oauth import clear_credentials, load_credentials
+        if load_credentials():
+            clear_credentials()
+            print("✓ Removed Gemini credentials.")
+        else:
+            print("No Gemini credentials stored.")
         return
 
     from .config import load_config

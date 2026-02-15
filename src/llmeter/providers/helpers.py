@@ -13,8 +13,8 @@ from typing import Optional
 def config_dir(*parts: str) -> Path:
     """Return a path under the llmeter XDG config directory.
 
-    >>> config_dir("codex_oauth.json")
-    PosixPath('/home/user/.config/llmeter/codex_oauth.json')
+    >>> config_dir("auth.json")
+    PosixPath('/home/user/.config/llmeter/auth.json')
     """
     xdg = os.environ.get("XDG_CONFIG_HOME", "")
     base = Path(xdg) if xdg else Path.home() / ".config"

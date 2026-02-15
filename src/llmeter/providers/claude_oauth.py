@@ -1,7 +1,7 @@
 """Anthropic OAuth flow for llmeter — login once, auto-refresh forever.
 
 Implements the same PKCE-based OAuth flow that pi-mono uses, storing
-credentials in ~/.config/llmeter/claude_oauth.json.
+credentials in the unified ~/.config/llmeter/auth.json under "anthropic".
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from typing import Optional
 
 import aiohttp
 
-from .helpers import config_dir
+from .. import auth
 
 # OAuth constants — Anthropic's shared public OAuth client ID,
 # used by Claude Code CLI, pi-mono, and llmeter alike.
@@ -28,13 +28,10 @@ TOKEN_URL = "https://console.anthropic.com/v1/oauth/token"
 REDIRECT_URI = "https://console.anthropic.com/oauth/code/callback"
 SCOPES = "org:create_api_key user:profile user:inference"
 
+PROVIDER_ID = "anthropic"
+
 # 5-minute safety buffer before actual expiry
 _EXPIRY_BUFFER_MS = 5 * 60 * 1000
-
-
-def _creds_path() -> Path:
-    """Path to llmeter's own Claude OAuth credentials file."""
-    return config_dir("claude_oauth.json")
 
 
 # ── PKCE helpers ───────────────────────────────────────────
@@ -57,51 +54,36 @@ def _generate_pkce() -> tuple[str, str]:
     return verifier, challenge
 
 
-# ── Credential persistence ─────────────────────────────────
+def _now_ms() -> int:
+    return int(time.time() * 1000)
+
+
+# ── Credential persistence (unified auth.json) ────────────
 
 def load_credentials() -> Optional[dict]:
-    """Load llmeter's own Claude OAuth credentials from disk.
+    """Load Claude OAuth credentials from the unified auth store.
 
-    Returns dict with keys: access_token, refresh_token, expires_at (ms epoch).
+    Returns dict with keys: access, refresh, expires (ms epoch).
     """
-    path = _creds_path()
-    if not path.exists():
-        return None
-    try:
-        data = json.loads(path.read_text())
-        if data.get("access_token") and data.get("refresh_token"):
-            return data
-    except (json.JSONDecodeError, OSError):
-        pass
+    creds = auth.load_provider(PROVIDER_ID)
+    if creds and creds.get("access") and creds.get("refresh"):
+        return creds
     return None
 
 
 def save_credentials(creds: dict) -> None:
-    """Persist credentials to disk with restricted permissions."""
-    path = _creds_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(creds, indent=2) + "\n")
-    try:
-        path.chmod(0o600)
-    except OSError:
-        pass
+    """Persist credentials to the unified auth store."""
+    auth.save_provider(PROVIDER_ID, creds)
 
 
 def clear_credentials() -> None:
     """Remove stored credentials."""
-    path = _creds_path()
-    if path.exists():
-        path.unlink()
+    auth.clear_provider(PROVIDER_ID)
 
 
 def is_token_expired(creds: dict) -> bool:
     """Check if the access token has expired (with buffer)."""
-    expires_at = creds.get("expires_at", 0)
-    return _now_ms() >= expires_at
-
-
-def _now_ms() -> int:
-    return int(time.time() * 1000)
+    return auth.is_expired(creds)
 
 
 # ── OAuth login flow ───────────────────────────────────────
@@ -163,18 +145,19 @@ def interactive_login() -> dict:
         raise RuntimeError(f"Token exchange failed: {e}") from e
 
     creds = {
-        "access_token": token_data["access_token"],
-        "refresh_token": token_data["refresh_token"],
-        "expires_at": _now_ms() + token_data["expires_in"] * 1000 - _EXPIRY_BUFFER_MS,
+        "type": "oauth",
+        "refresh": token_data["refresh_token"],
+        "access": token_data["access_token"],
+        "expires": _now_ms() + token_data["expires_in"] * 1000 - _EXPIRY_BUFFER_MS,
     }
 
     save_credentials(creds)
-    print(f"✓ Claude OAuth credentials saved to {_creds_path()}")
+    print(f"✓ Claude OAuth credentials saved to {auth._auth_path()}")
     return creds
 
 
 async def _exchange_code(payload: dict, timeout: float = 30.0) -> dict:
-    """POST the token exchange request using aiohttp (avoids urllib User-Agent issues)."""
+    """POST the token exchange request using aiohttp."""
     async with aiohttp.ClientSession() as session:
         async with session.post(
             TOKEN_URL,
@@ -196,7 +179,7 @@ async def refresh_access_token(creds: dict, timeout: float = 30.0) -> dict:
     Updates and persists the credentials on success.
     Raises RuntimeError on failure.
     """
-    refresh_token = creds.get("refresh_token")
+    refresh_token = creds.get("refresh")
     if not refresh_token:
         raise RuntimeError("No refresh token available — run `llmeter --login-claude`.")
 
@@ -221,9 +204,10 @@ async def refresh_access_token(creds: dict, timeout: float = 30.0) -> dict:
             token_data = await resp.json()
 
     new_creds = {
-        "access_token": token_data["access_token"],
-        "refresh_token": token_data.get("refresh_token", refresh_token),
-        "expires_at": _now_ms() + token_data["expires_in"] * 1000 - _EXPIRY_BUFFER_MS,
+        "type": "oauth",
+        "refresh": token_data.get("refresh_token", refresh_token),
+        "access": token_data["access_token"],
+        "expires": _now_ms() + token_data["expires_in"] * 1000 - _EXPIRY_BUFFER_MS,
     }
 
     save_credentials(new_creds)
@@ -247,4 +231,4 @@ async def get_valid_access_token(timeout: float = 30.0) -> Optional[str]:
         except RuntimeError:
             return None
 
-    return creds.get("access_token")
+    return creds.get("access")
