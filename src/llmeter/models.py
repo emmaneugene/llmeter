@@ -93,39 +93,53 @@ class ProviderResult:
 
 # ── Provider display metadata ──────────────────────────────────────────────
 
-PROVIDERS = {
-    "codex": {
-        "name": "Codex",
-        "color": "#10a37f",
-        "icon": "⬡",
-        "primary_label": "Session (5h)",
-        "secondary_label": "Weekly",
-    },
-    "claude": {
-        "name": "Claude",
-        "color": "#d4a27f",
-        "icon": "◈",
-        "primary_label": "Session (5h)",
-        "secondary_label": "Weekly",
-        "tertiary_label": "Sonnet",
-    },
-    "gemini": {
-        "name": "Gemini",
-        "color": "#ab87ea",
-        "icon": "✦",
-        "primary_label": "Pro (24h)",
-        "secondary_label": "Flash (24h)",
-    },
-    "openai-api": {
-        "name": "OpenAI API",
-        "color": "#10a37f",
-        "icon": "⬡",
-        "primary_label": "Spend",
-    },
-    "anthropic-api": {
-        "name": "Anthropic API",
-        "color": "#d4a27f",
-        "icon": "◈",
-        "primary_label": "Spend",
-    },
+
+@dataclass(frozen=True)
+class ProviderMeta:
+    """Display metadata for a provider (single source of truth)."""
+    id: str
+    name: str
+    icon: str
+    color: str
+    primary_label: str = "Session"
+    secondary_label: str = "Weekly"
+    tertiary_label: str = "Sonnet"
+
+    def to_result(self, **overrides) -> ProviderResult:
+        """Create a ProviderResult pre-filled with this provider's metadata."""
+        kwargs: dict = dict(
+            provider_id=self.id,
+            display_name=self.name,
+            icon=self.icon,
+            color=self.color,
+            primary_label=self.primary_label,
+            secondary_label=self.secondary_label,
+            tertiary_label=self.tertiary_label,
+        )
+        kwargs.update(overrides)
+        return ProviderResult(**kwargs)
+
+
+PROVIDERS: dict[str, ProviderMeta] = {
+    "codex": ProviderMeta(
+        id="codex", name="Codex", icon="⬡", color="#10a37f",
+        primary_label="Session (5h)", secondary_label="Weekly",
+    ),
+    "claude": ProviderMeta(
+        id="claude", name="Claude", icon="◈", color="#d4a27f",
+        primary_label="Session (5h)", secondary_label="Weekly",
+        tertiary_label="Sonnet",
+    ),
+    "gemini": ProviderMeta(
+        id="gemini", name="Gemini", icon="✦", color="#ab87ea",
+        primary_label="Pro (24h)", secondary_label="Flash (24h)",
+    ),
+    "openai-api": ProviderMeta(
+        id="openai-api", name="OpenAI API", icon="⬡", color="#10a37f",
+        primary_label="Spend",
+    ),
+    "anthropic-api": ProviderMeta(
+        id="anthropic-api", name="Anthropic API", icon="◈", color="#d4a27f",
+        primary_label="Spend",
+    ),
 }

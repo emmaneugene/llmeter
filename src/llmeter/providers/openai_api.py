@@ -17,6 +17,7 @@ import aiohttp
 
 from ..models import (
     CostInfo,
+    PROVIDERS,
     ProviderIdentity,
     ProviderResult,
     RateWindow,
@@ -32,14 +33,7 @@ async def fetch_openai_api(
     """Fetch OpenAI API spend for the current billing month."""
     settings = settings or {}
 
-    result = ProviderResult(
-        provider_id="openai-api",
-        display_name="OpenAI API",
-        icon="⬡",
-        color="#10a37f",
-        primary_label="Spend",
-        source="api",
-    )
+    result = PROVIDERS["openai-api"].to_result(source="api")
 
     # Resolve API key
     api_key = (

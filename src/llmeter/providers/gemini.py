@@ -7,7 +7,6 @@ Calls the retrieveUserQuota endpoint for per-model quota buckets.
 
 from __future__ import annotations
 
-import base64
 import json
 import os
 import re
@@ -21,10 +20,12 @@ import aiohttp
 
 from ..models import (
     CostInfo,
+    PROVIDERS,
     ProviderIdentity,
     ProviderResult,
     RateWindow,
 )
+from .helpers import decode_jwt_payload, parse_iso8601
 
 QUOTA_ENDPOINT = "https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuota"
 LOAD_CODE_ASSIST_ENDPOINT = "https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist"
@@ -39,15 +40,7 @@ async def fetch_gemini(
     settings: dict | None = None,
 ) -> ProviderResult:
     """Fetch Gemini CLI usage quotas."""
-    result = ProviderResult(
-        provider_id="gemini",
-        display_name="Gemini",
-        icon="✦",
-        color="#ab87ea",
-        primary_label="Pro (24h)",
-        secondary_label="Flash (24h)",
-        source="api",
-    )
+    result = PROVIDERS["gemini"].to_result(source="api")
 
     home = Path.home()
 
@@ -167,34 +160,18 @@ def _load_credentials(home: Path) -> Optional[dict]:
 
 def _extract_email_from_jwt(id_token: Optional[str]) -> Optional[str]:
     """Extract email claim from a JWT id_token (no verification)."""
-    claims = _decode_jwt_claims(id_token)
+    if not id_token:
+        return None
+    claims = decode_jwt_payload(id_token)
     return claims.get("email") if claims else None
 
 
 def _extract_hd_from_jwt(id_token: Optional[str]) -> Optional[str]:
     """Extract hosted domain (hd) claim from a JWT id_token."""
-    claims = _decode_jwt_claims(id_token)
-    return claims.get("hd") if claims else None
-
-
-def _decode_jwt_claims(id_token: Optional[str]) -> Optional[dict]:
-    """Decode JWT payload without verification."""
     if not id_token:
         return None
-    parts = id_token.split(".")
-    if len(parts) < 2:
-        return None
-    payload = parts[1]
-    # Fix base64url padding
-    payload = payload.replace("-", "+").replace("_", "/")
-    remainder = len(payload) % 4
-    if remainder:
-        payload += "=" * (4 - remainder)
-    try:
-        data = base64.b64decode(payload)
-        return json.loads(data)
-    except Exception:
-        return None
+    claims = decode_jwt_payload(id_token)
+    return claims.get("hd") if claims else None
 
 
 # ── Token Refresh ──────────────────────────────────────────────
@@ -395,7 +372,7 @@ async def _fetch_quota(
         if model_id is None or fraction is None:
             continue
 
-        reset_time = _parse_reset_time(bucket.get("resetTime"))
+        reset_time = parse_iso8601(bucket.get("resetTime"))
 
         if model_id in model_map:
             if fraction < model_map[model_id][0]:
@@ -407,16 +384,6 @@ async def _fetch_quota(
         (model_id, frac, reset_dt)
         for model_id, (frac, reset_dt) in sorted(model_map.items())
     ]
-
-
-def _parse_reset_time(s: Optional[str]) -> Optional[datetime]:
-    """Parse an ISO 8601 datetime string."""
-    if not s:
-        return None
-    try:
-        return datetime.fromisoformat(s.replace("Z", "+00:00"))
-    except (ValueError, TypeError):
-        return None
 
 
 def _tier_to_plan(tier: Optional[str], hosted_domain: Optional[str]) -> Optional[str]:

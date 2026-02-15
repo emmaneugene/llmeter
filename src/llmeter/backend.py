@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from typing import Callable, Awaitable
 
-from .models import ProviderResult, PROVIDERS
+from .models import ProviderMeta, ProviderResult, PROVIDERS
 from .providers.codex import fetch_codex
 from .providers.claude import fetch_claude
 from .providers.gemini import fetch_gemini
@@ -29,16 +29,13 @@ PROVIDER_FETCHERS: dict[str, FetchFunc] = {
 DEFAULT_PROVIDER_ORDER = ["codex", "claude"]
 
 
+_FALLBACK_META = ProviderMeta(id="?", name="Unknown", icon="●", color="#888888")
+
+
 def placeholder_result(provider_id: str) -> ProviderResult:
     """Create a loading placeholder for a provider."""
-    meta = PROVIDERS.get(provider_id, {})
-    return ProviderResult(
-        provider_id=provider_id,
-        display_name=meta.get("name", provider_id.title()),
-        icon=meta.get("icon", "●"),
-        color=meta.get("color", "#888888"),
-        source="loading",
-    )
+    meta = PROVIDERS.get(provider_id, _FALLBACK_META)
+    return meta.to_result(provider_id=provider_id, source="loading")
 
 
 async def fetch_one(
@@ -48,13 +45,11 @@ async def fetch_one(
 ) -> ProviderResult:
     """Fetch usage data for a single provider."""
     fetcher = PROVIDER_FETCHERS.get(provider_id)
+    meta = PROVIDERS.get(provider_id, _FALLBACK_META)
+
     if not fetcher:
-        return ProviderResult(
-            provider_id=provider_id,
-            display_name=provider_id.title(),
-            icon="●",
-            color="#888888",
-            error=f"Unknown provider: {provider_id}",
+        return meta.to_result(
+            provider_id=provider_id, error=f"Unknown provider: {provider_id}",
         )
 
     try:
@@ -63,14 +58,7 @@ async def fetch_one(
             kwargs["settings"] = settings
         return await fetcher(**kwargs)
     except Exception as e:
-        meta = PROVIDERS.get(provider_id, {})
-        return ProviderResult(
-            provider_id=provider_id,
-            display_name=meta.get("name", provider_id.title()),
-            icon=meta.get("icon", "●"),
-            color=meta.get("color", "#888888"),
-            error=str(e),
-        )
+        return meta.to_result(provider_id=provider_id, error=str(e))
 
 
 async def fetch_all(

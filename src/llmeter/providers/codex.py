@@ -21,25 +21,20 @@ import aiohttp
 
 from ..models import (
     CreditsInfo,
+    PROVIDERS,
     ProviderIdentity,
     ProviderResult,
     RateWindow,
 )
 from . import codex_oauth
+from .helpers import parse_iso8601
 
 USAGE_URL = "https://chatgpt.com/backend-api/api/codex/usage"
 
 
 async def fetch_codex(timeout: float = 20.0, settings: dict | None = None) -> ProviderResult:
     """Fetch Codex usage via direct API (preferred) or RPC fallback."""
-    result = ProviderResult(
-        provider_id="codex",
-        display_name="Codex",
-        icon="⬡",
-        color="#10a37f",
-        primary_label="Session (5h)",
-        secondary_label="Weekly",
-    )
+    result = PROVIDERS["codex"].to_result()
 
     # 1. Try direct API with own OAuth credentials
     creds = await codex_oauth.get_valid_credentials(timeout=timeout)
@@ -158,10 +153,7 @@ def _parse_rate_window(window: dict) -> RateWindow:
         if isinstance(resets_raw, (int, float)):
             resets_at = datetime.fromtimestamp(resets_raw, tz=timezone.utc)
         elif isinstance(resets_raw, str):
-            try:
-                resets_at = datetime.fromisoformat(resets_raw.replace("Z", "+00:00"))
-            except (ValueError, TypeError):
-                pass
+            resets_at = parse_iso8601(resets_raw)
 
     return RateWindow(
         used_percent=used_pct,

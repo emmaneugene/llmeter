@@ -24,11 +24,13 @@ import aiohttp
 
 from ..models import (
     CostInfo,
+    PROVIDERS,
     ProviderIdentity,
     ProviderResult,
     RateWindow,
 )
 from . import claude_oauth
+from .helpers import parse_iso8601
 
 OAUTH_USAGE_URL = "https://api.anthropic.com/api/oauth/usage"
 BETA_HEADER = "oauth-2025-04-20"
@@ -36,15 +38,7 @@ BETA_HEADER = "oauth-2025-04-20"
 
 async def fetch_claude(timeout: float = 30.0, settings: dict | None = None) -> ProviderResult:
     """Fetch Claude usage via the OAuth usage API."""
-    result = ProviderResult(
-        provider_id="claude",
-        display_name="Claude",
-        icon="◈",
-        color="#d4a27f",
-        primary_label="Session (5h)",
-        secondary_label="Weekly",
-        tertiary_label="Sonnet",
-    )
+    result = PROVIDERS["claude"].to_result()
 
     # --- Resolve an access token ---
     access_token, source, tier = await _resolve_access_token(timeout=timeout)
@@ -73,7 +67,7 @@ async def fetch_claude(timeout: float = 30.0, settings: dict | None = None) -> P
         result.primary = RateWindow(
             used_percent=five_hour["utilization"],
             window_minutes=5 * 60,
-            resets_at=_parse_iso8601(five_hour.get("resets_at")),
+            resets_at=parse_iso8601(five_hour.get("resets_at")),
         )
     else:
         result.error = "Claude API returned no session usage data."
@@ -84,7 +78,7 @@ async def fetch_claude(timeout: float = 30.0, settings: dict | None = None) -> P
         result.secondary = RateWindow(
             used_percent=seven_day["utilization"],
             window_minutes=7 * 24 * 60,
-            resets_at=_parse_iso8601(seven_day.get("resets_at")),
+            resets_at=parse_iso8601(seven_day.get("resets_at")),
         )
 
     for key in ("seven_day_sonnet", "seven_day_opus"):
@@ -93,7 +87,7 @@ async def fetch_claude(timeout: float = 30.0, settings: dict | None = None) -> P
             result.tertiary = RateWindow(
                 used_percent=model_window["utilization"],
                 window_minutes=7 * 24 * 60,
-                resets_at=_parse_iso8601(model_window.get("resets_at")),
+                resets_at=parse_iso8601(model_window.get("resets_at")),
             )
             result.tertiary_label = "Sonnet" if "sonnet" in key else "Opus"
             break
@@ -397,16 +391,6 @@ def _infer_plan_from_org(
 
 
 # ── Helpers ────────────────────────────────────────────────
-
-def _parse_iso8601(s: str | None) -> Optional[datetime]:
-    """Parse an ISO 8601 datetime string."""
-    if not s:
-        return None
-    try:
-        return datetime.fromisoformat(s.replace("Z", "+00:00"))
-    except (ValueError, TypeError):
-        return None
-
 
 def _infer_plan(tier: str) -> Optional[str]:
     """Infer Claude plan name from the rate_limit_tier."""
