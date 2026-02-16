@@ -3,7 +3,7 @@
 Covers:
 1. Credential storage (cookie-based)
 2. Usage endpoint calls
-3. Parsing usage data into ProviderResult
+3. Parsing usage data into ProviderResult (dollar-based and request-based plans)
 """
 
 from __future__ import annotations
@@ -18,8 +18,10 @@ from llmeter.providers import cursor_auth
 from llmeter.providers.cursor import (
     fetch_cursor,
     USAGE_SUMMARY_URL,
+    USAGE_URL,
     AUTH_ME_URL,
     _parse_usage_response,
+    _parse_request_usage,
     _format_membership,
 )
 from llmeter.models import ProviderResult, PROVIDERS
@@ -106,6 +108,36 @@ SAMPLE_USER_INFO = {
     "sub": "auth0|12345",
 }
 
+# Enterprise request-based plan
+SAMPLE_ENTERPRISE_SUMMARY = {
+    "billingCycleStart": "2026-02-01T00:00:00.000Z",
+    "billingCycleEnd": "2026-03-01T00:00:00.000Z",
+    "membershipType": "enterprise",
+    "individualUsage": {
+        "plan": {
+            "enabled": True,
+            "used": 40500,
+            "limit": 50000,
+        },
+        "onDemand": {
+            "enabled": True,
+            "used": 0,
+            "limit": 0,
+        },
+    },
+}
+
+SAMPLE_REQUEST_USAGE = {
+    "gpt-4": {
+        "numRequests": 138,
+        "numRequestsTotal": 138,
+        "numTokens": 50000,
+        "maxRequestUsage": 500,
+        "maxTokenUsage": None,
+    },
+    "startOfMonth": "2026-02-01",
+}
+
 
 class TestCursorUsageEndpoint:
     """Test the cookie-authenticated API calls."""
@@ -116,12 +148,36 @@ class TestCursorUsageEndpoint:
         with aioresponses() as mocked:
             mocked.get(USAGE_SUMMARY_URL, payload=SAMPLE_USAGE_SUMMARY)
             mocked.get(AUTH_ME_URL, payload=SAMPLE_USER_INFO)
+            mocked.get(
+                f"{USAGE_URL}?user=auth0%7C12345",
+                payload={"gpt-4": {"numRequests": 10, "maxRequestUsage": None}},
+            )
 
             result = await fetch_cursor(timeout=10.0)
 
         assert result.error is None
         assert result.source == "cookie"
         assert result.primary is not None
+
+    async def test_fetch_enterprise_with_requests(self, tmp_config_dir: Path) -> None:
+        """Enterprise plan should use request counts, not dollar amounts."""
+        cursor_auth.save_credentials("WorkosCursorSessionToken=valid")
+
+        with aioresponses() as mocked:
+            mocked.get(USAGE_SUMMARY_URL, payload=SAMPLE_ENTERPRISE_SUMMARY)
+            mocked.get(AUTH_ME_URL, payload=SAMPLE_USER_INFO)
+            mocked.get(
+                f"{USAGE_URL}?user=auth0%7C12345",
+                payload=SAMPLE_REQUEST_USAGE,
+            )
+
+            result = await fetch_cursor(timeout=10.0)
+
+        assert result.error is None
+        # 138/500 = 27.6%, NOT the dollar-based 81%
+        assert result.primary is not None
+        assert result.primary.used_percent == pytest.approx(27.6)
+        assert "138 / 500" in result.primary.reset_description
 
     async def test_fetch_without_credentials(self, tmp_config_dir: Path) -> None:
         result = await fetch_cursor(timeout=5.0)
@@ -138,7 +194,6 @@ class TestCursorUsageEndpoint:
 
         assert result.error is not None
         assert "expired" in result.error.lower()
-        # Cookie should be cleared
         assert cursor_auth.load_credentials() is None
 
     async def test_fetch_clears_on_403(self, tmp_config_dir: Path) -> None:
@@ -159,8 +214,9 @@ class TestCursorUsageEndpoint:
         with aioresponses() as mocked:
             mocked.get(USAGE_SUMMARY_URL, payload=SAMPLE_USAGE_SUMMARY)
             mocked.get(AUTH_ME_URL, payload=SAMPLE_USER_INFO)
+            # No request usage endpoint needed — no sub-based fetch will fail gracefully
 
-            await fetch_cursor(timeout=10.0)
+            result = await fetch_cursor(timeout=10.0)
 
         creds = cursor_auth.load_credentials()
         assert creds is not None
@@ -184,14 +240,16 @@ class TestCursorUsageEndpoint:
 
 
 class TestCursorUsageParsing:
-    """Test parsing of the /api/usage-summary response."""
+    """Test parsing of the API responses."""
 
     def _make_result(self) -> ProviderResult:
         return PROVIDERS["cursor"].to_result()
 
-    def test_parse_pro_plan(self) -> None:
+    # ── Dollar-based plans ──────────────────────────
+
+    def test_parse_pro_plan_dollar_based(self) -> None:
         result = self._make_result()
-        _parse_usage_response(SAMPLE_USAGE_SUMMARY, SAMPLE_USER_INFO, result)
+        _parse_usage_response(SAMPLE_USAGE_SUMMARY, SAMPLE_USER_INFO, None, result)
 
         # Plan: 1500/5000 cents = 30%
         assert result.primary is not None
@@ -220,30 +278,13 @@ class TestCursorUsageParsing:
             },
         }
         result = self._make_result()
-        _parse_usage_response(data, None, result)
+        _parse_usage_response(data, None, None, result)
 
         assert result.primary is not None
         assert result.primary.used_percent == 25.0
         assert result.secondary is None
         assert result.cost is None
         assert result.identity.login_method == "Cursor Hobby"
-
-    def test_parse_enterprise_high_usage(self) -> None:
-        data = {
-            "membershipType": "enterprise",
-            "billingCycleEnd": "2025-03-01T00:00:00.000Z",
-            "individualUsage": {
-                "plan": {"used": 45000, "limit": 50000},
-                "onDemand": {"used": 8000, "limit": 20000},
-            },
-        }
-        result = self._make_result()
-        _parse_usage_response(data, None, result)
-
-        assert result.primary.used_percent == 90.0
-        assert result.secondary.used_percent == 40.0
-        assert result.cost.used == 80.0
-        assert result.cost.limit == 200.0
 
     def test_parse_uses_percent_when_no_limit(self) -> None:
         """When limit is 0, fall back to totalPercentUsed field."""
@@ -253,9 +294,8 @@ class TestCursorUsageParsing:
             },
         }
         result = self._make_result()
-        _parse_usage_response(data, None, result)
+        _parse_usage_response(data, None, None, result)
 
-        # 0.42 should be interpreted as 42%
         assert result.primary.used_percent == 42.0
 
     def test_parse_percent_already_0_to_100(self) -> None:
@@ -266,13 +306,13 @@ class TestCursorUsageParsing:
             },
         }
         result = self._make_result()
-        _parse_usage_response(data, None, result)
+        _parse_usage_response(data, None, None, result)
 
         assert result.primary.used_percent == 65.0
 
     def test_parse_empty_response(self) -> None:
         result = self._make_result()
-        _parse_usage_response({}, None, result)
+        _parse_usage_response({}, None, None, result)
 
         assert result.primary is not None
         assert result.primary.used_percent == 0.0
@@ -287,9 +327,93 @@ class TestCursorUsageParsing:
             },
         }
         result = self._make_result()
-        _parse_usage_response(data, None, result)
+        _parse_usage_response(data, None, None, result)
 
-        assert result.cost is None  # No cost if on_demand used is 0
+        assert result.cost is None
+
+    # ── Request-based plans (enterprise) ────────────
+
+    def test_parse_enterprise_request_plan(self) -> None:
+        """Enterprise plan with maxRequestUsage should use request counts."""
+        result = self._make_result()
+        _parse_usage_response(
+            SAMPLE_ENTERPRISE_SUMMARY,
+            {"email": "user@company.com"},
+            SAMPLE_REQUEST_USAGE,
+            result,
+        )
+
+        # 138/500 requests = 27.6%
+        assert result.primary is not None
+        assert result.primary.used_percent == pytest.approx(27.6)
+        assert "138 / 500" in result.primary.reset_description
+        assert result.identity.login_method == "Cursor Enterprise"
+        assert result.identity.account_email == "user@company.com"
+
+    def test_parse_request_plan_at_limit(self) -> None:
+        request_data = {
+            "gpt-4": {
+                "numRequests": 500,
+                "numRequestsTotal": 500,
+                "maxRequestUsage": 500,
+            },
+        }
+        result = self._make_result()
+        _parse_usage_response(
+            SAMPLE_ENTERPRISE_SUMMARY, None, request_data, result,
+        )
+
+        assert result.primary.used_percent == 100.0
+        assert "500 / 500" in result.primary.reset_description
+
+    def test_parse_request_plan_prefers_total(self) -> None:
+        """Should prefer numRequestsTotal over numRequests."""
+        request_data = {
+            "gpt-4": {
+                "numRequests": 120,
+                "numRequestsTotal": 240,
+                "maxRequestUsage": 500,
+            },
+        }
+        result = self._make_result()
+        _parse_usage_response({}, None, request_data, result)
+
+        assert result.primary.used_percent == pytest.approx(48.0)
+        assert "240 / 500" in result.primary.reset_description
+
+    def test_parse_request_usage_no_max_is_not_request_plan(self) -> None:
+        """Without maxRequestUsage, should fall back to dollar-based."""
+        request_data = {
+            "gpt-4": {
+                "numRequests": 100,
+                "maxRequestUsage": None,
+            },
+        }
+        used, limit = _parse_request_usage(request_data)
+        assert limit is None  # not a request-based plan
+
+    def test_parse_request_usage_missing_gpt4(self) -> None:
+        used, limit = _parse_request_usage({})
+        assert limit is None
+
+    def test_parse_request_usage_none(self) -> None:
+        used, limit = _parse_request_usage(None)
+        assert limit is None
+
+    # ── Dollar-based still works when request data absent ───
+
+    def test_dollar_plan_when_no_request_data(self) -> None:
+        """Without request data, enterprise plan uses dollar amounts."""
+        result = self._make_result()
+        _parse_usage_response(
+            SAMPLE_ENTERPRISE_SUMMARY, None, None, result,
+        )
+
+        # Dollar-based: 40500/50000 = 81%
+        assert result.primary.used_percent == 81.0
+        assert result.primary.reset_description is None
+
+    # ── Misc ────────────────────────────────────────
 
     def test_format_membership_types(self) -> None:
         assert _format_membership("pro") == "Cursor Pro"
@@ -298,4 +422,4 @@ class TestCursorUsageParsing:
         assert _format_membership("team") == "Cursor Team"
         assert _format_membership("business") == "Cursor Business"
         assert _format_membership("custom") == "Cursor Custom"
-        assert _format_membership("PRO") == "Cursor Pro"  # case-insensitive
+        assert _format_membership("PRO") == "Cursor Pro"
