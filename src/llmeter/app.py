@@ -31,7 +31,7 @@ HELP_TEXT = """\
   [bold]q[/]       Quit
 
 [dim]Data is fetched directly from provider APIs.
-Configure providers in ~/.config/llmeter/config.json[/]
+Configure providers in ~/.config/llmeter/settings.json[/]
 
 [dim]Press [bold]Escape[/bold] to close this dialog.[/]
 """

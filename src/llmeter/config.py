@@ -1,6 +1,6 @@
 """Configuration file handling for llmeter.
 
-Config lives at ~/.config/llmeter/config.json (XDG).
+Config lives at ~/.config/llmeter/settings.json (XDG).
 
 All known providers are listed in the config.  The ``enabled`` flag on each
 entry determines whether it is displayed.  Provider order in the array
@@ -108,7 +108,7 @@ class AppConfig:
 
 def config_path() -> Path:
     """Return the config file path, preferring XDG."""
-    return config_dir("config.json")
+    return config_dir("settings.json")
 
 
 def load_config() -> AppConfig:
@@ -177,7 +177,7 @@ def init_config() -> None:
 
 
 def enable_provider(provider_id: str) -> None:
-    """Enable a provider in config.json, creating the file if needed.
+    """Enable a provider in settings.json, creating the file if needed.
 
     If the provider isn't listed yet, it is appended.  If it's already
     enabled, this is a no-op.

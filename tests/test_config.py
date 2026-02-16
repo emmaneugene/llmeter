@@ -244,7 +244,7 @@ class TestLoadConfig:
         assert by_id["cursor"]["enabled"] is True
 
     def test_enable_provider_creates_config_if_missing(self, tmp_config_dir: Path) -> None:
-        """enable_provider should create config.json if it doesn't exist."""
+        """enable_provider should create settings.json if it doesn't exist."""
         path = config_path()
         assert not path.exists()
 

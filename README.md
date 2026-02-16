@@ -78,7 +78,7 @@ uv venv && uv pip install -e ".[dev]"
 
 ## Configuration
 
-Config file: `~/.config/llmeter/config.json`
+Config file: `~/.config/llmeter/settings.json`
 
 Generate a default one:
 ```bash
