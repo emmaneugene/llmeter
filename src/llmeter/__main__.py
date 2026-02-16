@@ -161,7 +161,7 @@ def _run_one_shot(config) -> None:
     results = asyncio.run(fetch_all(
         provider_ids=config.provider_ids,
         provider_settings={
-            p.id: p.settings for p in config.providers if p.settings
+            p.id: p.settings for p in config.enabled_providers if p.settings
         },
     ))
 

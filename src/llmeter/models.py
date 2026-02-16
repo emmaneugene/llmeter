@@ -104,6 +104,7 @@ class ProviderMeta:
     primary_label: str = "Session"
     secondary_label: str = "Weekly"
     tertiary_label: str = "Sonnet"
+    default_enabled: bool = False
 
     def to_result(self, **overrides) -> ProviderResult:
         """Create a ProviderResult pre-filled with this provider's metadata."""
@@ -124,11 +125,13 @@ PROVIDERS: dict[str, ProviderMeta] = {
     "codex": ProviderMeta(
         id="codex", name="Codex", icon="⬡", color="#10a37f",
         primary_label="Session (5h)", secondary_label="Weekly",
+        default_enabled=True,
     ),
     "claude": ProviderMeta(
         id="claude", name="Claude", icon="◈", color="#d4a27f",
         primary_label="Session (5h)", secondary_label="Weekly",
         tertiary_label="Sonnet",
+        default_enabled=True,
     ),
     "gemini": ProviderMeta(
         id="gemini", name="Gemini", icon="✦", color="#ab87ea",

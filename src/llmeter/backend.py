@@ -25,8 +25,10 @@ PROVIDER_FETCHERS: dict[str, FetchFunc] = {
     "anthropic-api": fetch_anthropic_api,
 }
 
-# Default order when no config file exists (only auto-detected providers)
-DEFAULT_PROVIDER_ORDER = ["codex", "claude"]
+# Canonical order for all providers (used by init_config and default config).
+# The `default_enabled` flag on each ProviderMeta controls which are active
+# out of the box.
+ALL_PROVIDER_ORDER = ["codex", "claude", "gemini", "openai-api", "anthropic-api"]
 
 
 _FALLBACK_META = ProviderMeta(id="?", name="Unknown", icon="●", color="#888888")
@@ -67,7 +69,10 @@ async def fetch_all(
     timeout: float = 30.0,
 ) -> list[ProviderResult]:
     """Fetch usage data for all specified providers in parallel."""
-    ids = provider_ids or DEFAULT_PROVIDER_ORDER
+    ids = provider_ids or [
+        pid for pid in ALL_PROVIDER_ORDER
+        if PROVIDERS.get(pid, ProviderMeta(id=pid, name="", icon="", color="")).default_enabled
+    ]
     settings_map = provider_settings or {}
 
     tasks = [

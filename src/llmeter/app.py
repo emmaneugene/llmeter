@@ -111,7 +111,7 @@ class LLMeterApp(App):
         yield Header(show_clock=True)
         with ScrollableContainer(id="main-body"):
             yield Vertical(id="provider-list")
-        if any(pcfg.id in DELAY_PRONE_PROVIDER_IDS for pcfg in self._config.providers):
+        if any(pcfg.id in DELAY_PRONE_PROVIDER_IDS for pcfg in self._config.enabled_providers):
             yield Static(DELAY_DISCLAIMER, id="legend-bar")
         yield Footer()
 
@@ -143,7 +143,7 @@ class LLMeterApp(App):
 
         # Mount placeholder cards immediately
         container = self.query_one("#provider-list", Vertical)
-        for pcfg in self._config.providers:
+        for pcfg in self._config.enabled_providers:
             placeholder = placeholder_result(pcfg.id)
             card = ProviderCard(placeholder, id=f"card-{pcfg.id}")
             self._cards[pcfg.id] = card
@@ -163,10 +163,10 @@ class LLMeterApp(App):
 
         self._refresh_in_progress = True
         self._refresh_queued = False
-        self._pending_provider_ids = {pcfg.id for pcfg in self._config.providers}
+        self._pending_provider_ids = {pcfg.id for pcfg in self._config.enabled_providers}
 
         self._update_status("Refreshing…")
-        for pcfg in self._config.providers:
+        for pcfg in self._config.enabled_providers:
             self._fetch_provider(pcfg.id, pcfg.settings)
 
     @work(thread=False, group="providers")
@@ -228,7 +228,7 @@ class LLMeterApp(App):
         else:
             # Count completed providers
             loaded = len(self._providers)
-            total = len(self._config.providers)
+            total = len(self._config.enabled_providers)
             if loaded < total:
                 parts.append(f"Loading {loaded}/{total}")
             else:

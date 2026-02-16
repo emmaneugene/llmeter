@@ -2,21 +2,21 @@
 
 Config lives at ~/.config/llmeter/config.json (XDG).
 
+All known providers are listed in the config.  The ``enabled`` flag on each
+entry determines whether it is displayed.  Provider order in the array
+controls the card display order.
+
 Example config:
 {
   "providers": [
-    { "id": "claude" },
-    { "id": "codex" },
-    { "id": "gemini" },
-    { "id": "openai-api", "api_key": "sk-...", "monthly_budget": 100.0 },
-    { "id": "anthropic-api", "api_key": "sk-ant-...", "monthly_budget": 50.0 }
+    { "id": "codex",         "enabled": true },
+    { "id": "claude",        "enabled": true },
+    { "id": "gemini",        "enabled": false },
+    { "id": "openai-api",    "enabled": false, "api_key": "sk-admin-..." },
+    { "id": "anthropic-api", "enabled": false, "api_key": "sk-ant-admin01-..." }
   ],
   "refresh_interval": 120
 }
-
-The order of the providers array controls the card display order.
-Only listed providers are shown. Omit the file to get all providers in default order.
-Provider-specific settings (api_key, monthly_budget, etc.) are passed through.
 """
 
 from __future__ import annotations
@@ -32,12 +32,20 @@ from .providers.helpers import config_dir
 class ProviderConfig:
     """Configuration for a single provider."""
     id: str
+    enabled: bool = True
     settings: dict = field(default_factory=dict)
 
     @classmethod
     def from_dict(cls, d: dict) -> "ProviderConfig":
-        settings = {k: v for k, v in d.items() if k != "id"}
-        return cls(id=d["id"], settings=settings)
+        enabled = d.get("enabled", True)
+        settings = {k: v for k, v in d.items() if k not in ("id", "enabled")}
+        return cls(id=d["id"], enabled=bool(enabled), settings=settings)
+
+    def to_dict(self) -> dict:
+        """Serialize back to a JSON-friendly dict."""
+        d: dict = {"id": self.id, "enabled": self.enabled}
+        d.update(self.settings)
+        return d
 
 
 @dataclass
@@ -50,7 +58,18 @@ class AppConfig:
     MAX_REFRESH = 3600.0  # 1 hour
 
     @property
+    def enabled_providers(self) -> list[ProviderConfig]:
+        """Only the enabled provider configs, preserving order."""
+        return [p for p in self.providers if p.enabled]
+
+    @property
     def provider_ids(self) -> list[str]:
+        """IDs of *enabled* providers only."""
+        return [p.id for p in self.providers if p.enabled]
+
+    @property
+    def all_provider_ids(self) -> list[str]:
+        """IDs of all providers (enabled and disabled)."""
         return [p.id for p in self.providers]
 
     def provider_settings(self, provider_id: str) -> dict:
@@ -72,10 +91,18 @@ class AppConfig:
 
     @classmethod
     def default(cls) -> "AppConfig":
-        """Default config: all providers in default order."""
-        from .backend import DEFAULT_PROVIDER_ORDER
+        """Default config with all providers; only default-enabled ones active."""
+        from .models import PROVIDERS
+        from .backend import ALL_PROVIDER_ORDER
         return cls(
-            providers=[ProviderConfig(id=pid) for pid in DEFAULT_PROVIDER_ORDER],
+            providers=[
+                ProviderConfig(
+                    id=pid,
+                    enabled=PROVIDERS[pid].default_enabled,
+                )
+                for pid in ALL_PROVIDER_ORDER
+                if pid in PROVIDERS
+            ],
         )
 
 
@@ -104,7 +131,8 @@ def load_config() -> AppConfig:
                 file=sys.stderr,
             )
         cfg.providers = valid
-        if not cfg.providers:
+        if not any(p.enabled for p in cfg.providers):
+            # Nothing enabled — fall back to defaults
             cfg = AppConfig.default()
         return cfg
     except (json.JSONDecodeError, KeyError, TypeError) as e:
@@ -114,17 +142,20 @@ def load_config() -> AppConfig:
 
 
 def init_config() -> None:
-    """Create a default config file if one doesn't exist."""
+    """Create a default config file with all providers pre-populated.
+
+    Providers that are enabled by default (codex, claude) start as
+    ``"enabled": true``; the rest start as ``"enabled": false``.
+    """
     path = config_path()
     if path.exists():
         print(f"Config already exists: {path}")
         return
 
-    from .backend import DEFAULT_PROVIDER_ORDER
-
+    cfg = AppConfig.default()
     data = {
-        "providers": [{"id": pid} for pid in DEFAULT_PROVIDER_ORDER],
-        "refresh_interval": 300,
+        "providers": [p.to_dict() for p in cfg.providers],
+        "refresh_interval": int(cfg.refresh_interval),
     }
 
     path.parent.mkdir(parents=True, exist_ok=True)

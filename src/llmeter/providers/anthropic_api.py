@@ -38,7 +38,7 @@ async def fetch_anthropic_api(
     """Fetch Anthropic API cost report for the current billing month."""
     settings = settings or {}
 
-    result = PROVIDERS["anthropic-api"].to_result(source="admin-api")
+    result = PROVIDERS["anthropic-api"].to_result(source="api")
 
     # Resolve API key — prefer admin key
     api_key = (
