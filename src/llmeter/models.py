@@ -122,15 +122,15 @@ class ProviderMeta:
 
 
 PROVIDERS: dict[str, ProviderMeta] = {
-    "codex": ProviderMeta(
-        id="codex", name="Codex", icon="⬡", color="#10a37f",
-        primary_label="Session (5h)", secondary_label="Weekly",
-        default_enabled=True,
-    ),
     "claude": ProviderMeta(
         id="claude", name="Claude", icon="◈", color="#d4a27f",
         primary_label="Session (5h)", secondary_label="Weekly",
         tertiary_label="Sonnet",
+        default_enabled=True,
+    ),
+    "codex": ProviderMeta(
+        id="codex", name="Codex", icon="⬡", color="#10a37f",
+        primary_label="Session (5h)", secondary_label="Weekly",
         default_enabled=True,
     ),
     "cursor": ProviderMeta(
