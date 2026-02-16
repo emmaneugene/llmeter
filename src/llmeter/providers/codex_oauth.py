@@ -66,6 +66,28 @@ def extract_account_id(access_token: str) -> Optional[str]:
     return None
 
 
+def extract_email(id_token: str) -> Optional[str]:
+    """Extract email from an OpenAI id_token JWT.
+
+    Checks top-level ``email`` claim first, then falls back to
+    ``https://api.openai.com/profile.email`` (same as CodexBar).
+    """
+    payload = decode_jwt_payload(id_token)
+    if not payload:
+        return None
+    # Direct email claim
+    email = payload.get("email")
+    if isinstance(email, str) and email:
+        return email.strip()
+    # Nested under profile claim
+    profile = payload.get("https://api.openai.com/profile")
+    if isinstance(profile, dict):
+        email = profile.get("email")
+        if isinstance(email, str) and email:
+            return email.strip()
+    return None
+
+
 # ── Credential persistence (unified auth.json) ────────────
 
 def load_credentials() -> Optional[dict]:
@@ -289,13 +311,20 @@ def _exchange_code_sync(code: str, verifier: str) -> dict:
     if not account_id:
         raise RuntimeError("Failed to extract accountId from access token.")
 
-    return {
+    # Extract email from id_token if available
+    id_token = token_data.get("id_token")
+    email = extract_email(id_token) if id_token else None
+
+    creds = {
         "type": "oauth",
         "access": access_token,
         "refresh": refresh_token,
         "expires": _now_ms() + int(expires_in) * 1000 - _EXPIRY_BUFFER_MS,
         "accountId": account_id,
     }
+    if email:
+        creds["email"] = email
+    return creds
 
 
 # ── Token refresh ──────────────────────────────────────────
@@ -339,6 +368,10 @@ async def refresh_access_token(creds: dict, timeout: float = 30.0) -> dict:
 
     account_id = extract_account_id(access_token) or creds.get("accountId")
 
+    # Extract email from id_token if available
+    id_token = token_data.get("id_token")
+    email = extract_email(id_token) if id_token else creds.get("email")
+
     new_creds = {
         "type": "oauth",
         "access": access_token,
@@ -346,6 +379,8 @@ async def refresh_access_token(creds: dict, timeout: float = 30.0) -> dict:
         "expires": _now_ms() + int(expires_in) * 1000 - _EXPIRY_BUFFER_MS,
         "accountId": account_id,
     }
+    if email:
+        new_creds["email"] = email
 
     save_credentials(new_creds)
     return new_creds

@@ -215,7 +215,7 @@ class TestCodexUsageParsing:
 
         # Identity
         assert result.identity is not None
-        assert result.identity.login_method == "plus"
+        assert result.identity.login_method == "ChatGPT Plus"
 
     async def test_parse_pro_plan(self, tmp_config_dir: Path) -> None:
         future = int(time.time() * 1000) + 3600_000
@@ -249,7 +249,7 @@ class TestCodexUsageParsing:
         assert result.primary.used_percent == 50
         assert result.secondary is None
         assert result.identity is not None
-        assert result.identity.login_method == "pro"
+        assert result.identity.login_method == "ChatGPT Pro"
 
     async def test_parse_no_rate_limit(self, tmp_config_dir: Path) -> None:
         """Response with plan_type but no rate_limit."""
@@ -268,7 +268,7 @@ class TestCodexUsageParsing:
         assert result.primary is None
         assert result.secondary is None
         assert result.identity is not None
-        assert result.identity.login_method == "free"
+        assert result.identity.login_method == "ChatGPT Free"
 
     async def test_parse_empty_response(self, tmp_config_dir: Path) -> None:
         """Empty object should result in no windows but no error either."""

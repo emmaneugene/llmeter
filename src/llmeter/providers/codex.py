@@ -69,7 +69,7 @@ async def fetch_codex(timeout: float = 20.0, settings: dict | None = None) -> Pr
         result.error = f"Codex API error: {e}"
         return result
 
-    _parse_usage_response(data, result)
+    _parse_usage_response(data, result, email=creds.get("email"))
 
     result.source = "oauth"
     result.updated_at = datetime.now(timezone.utc)
@@ -102,7 +102,7 @@ async def fetch_codex(timeout: float = 20.0, settings: dict | None = None) -> Pr
 # }
 
 
-def _parse_usage_response(data: dict, result: ProviderResult) -> None:
+def _parse_usage_response(data: dict, result: ProviderResult, email: str | None = None) -> None:
     """Parse the /wham/usage response into the ProviderResult."""
     rate_limit = data.get("rate_limit")
     if isinstance(rate_limit, dict):
@@ -124,8 +124,29 @@ def _parse_usage_response(data: dict, result: ProviderResult) -> None:
                 pass
 
     plan_type = data.get("plan_type")
-    if plan_type:
-        result.identity = ProviderIdentity(login_method=str(plan_type))
+    if plan_type or email:
+        result.identity = ProviderIdentity(
+            account_email=email,
+            login_method=_format_plan_type(str(plan_type)) if plan_type else None,
+        )
+
+
+def _format_plan_type(plan_type: str) -> str:
+    """Format plan type for display (e.g. 'plus' → 'ChatGPT Plus')."""
+    known = {
+        "guest": "ChatGPT Guest",
+        "free": "ChatGPT Free",
+        "go": "ChatGPT Go",
+        "plus": "ChatGPT Plus",
+        "pro": "ChatGPT Pro",
+        "free_workspace": "ChatGPT Free Workspace",
+        "team": "ChatGPT Team",
+        "business": "ChatGPT Business",
+        "education": "ChatGPT Education",
+        "enterprise": "ChatGPT Enterprise",
+        "edu": "ChatGPT Edu",
+    }
+    return known.get(plan_type.lower(), f"ChatGPT {plan_type.capitalize()}")
 
 
 def _parse_window(window: dict) -> RateWindow:
