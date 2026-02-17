@@ -31,6 +31,8 @@ src/llmeter/
 │   ├── cursor_auth.py   # Cursor auth
 │   ├── gemini.py        # Gemini CLI quota fetcher
 │   ├── gemini_oauth.py  # Gemini OAuth flow
+│   ├── copilot.py       # GitHub Copilot usage fetcher
+│   ├── copilot_oauth.py # Copilot Device Flow OAuth
 │   ├── openai_api.py    # OpenAI API billing
 │   └── anthropic_api.py # Anthropic API billing
 └── widgets/
@@ -42,6 +44,7 @@ tests/                   # pytest test suite
 ├── test_auth.py
 ├── test_codex.py
 ├── test_claude.py
+├── test_copilot.py
 ├── test_cursor.py
 ├── test_gemini.py
 └── test_config.py

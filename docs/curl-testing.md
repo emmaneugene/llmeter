@@ -14,9 +14,10 @@ Quick-reference curl commands for manually testing each provider's API endpoints
 2. [Codex / ChatGPT (OAuth)](#2-codex--chatgpt-oauth)
 3. [Cursor (Cookie)](#3-cursor-cookie)
 4. [Gemini CLI (OAuth)](#4-gemini-cli-oauth)
-5. [OpenAI API (Admin Key)](#5-openai-api-admin-key)
-6. [Anthropic API (Admin Key)](#6-anthropic-api-admin-key)
-7. [Extracting Tokens from auth.json](#7-extracting-tokens-from-authjson)
+5. [GitHub Copilot (Device Flow)](#5-github-copilot-device-flow)
+6. [OpenAI API (Admin Key)](#6-openai-api-admin-key)
+7. [Anthropic API (Admin Key)](#7-anthropic-api-admin-key)
+8. [Extracting Tokens from auth.json](#8-extracting-tokens-from-authjson)
 
 ---
 
@@ -25,7 +26,7 @@ Quick-reference curl commands for manually testing each provider's API endpoints
 **Auth:** Bearer token from Claude OAuth flow (`llmeter --login-claude`).
 
 ```bash
-# Set your access token (see §7 for how to extract it)
+# Set your access token (see §8 for how to extract it)
 CLAUDE_TOKEN="<your-access-token>"
 ```
 
@@ -100,7 +101,7 @@ curl -s \
 **Auth:** Bearer token + Account ID from OpenAI Codex OAuth flow (`llmeter --login-codex`).
 
 ```bash
-# Set your credentials (see §7 for how to extract them)
+# Set your credentials (see §8 for how to extract them)
 CODEX_TOKEN="<your-access-token>"
 CODEX_ACCOUNT_ID="<your-account-id>"
 ```
@@ -148,7 +149,7 @@ curl -s \
 **Auth:** Session cookie from browser (`llmeter --login-cursor`).
 
 ```bash
-# Set your cookie (see §7 for how to extract it)
+# Set your cookie (see §8 for how to extract it)
 CURSOR_COOKIE="WorkosCursorSessionToken=..."
 ```
 
@@ -235,7 +236,7 @@ curl -s \
 **Auth:** Google OAuth Bearer token from Gemini CLI flow (`llmeter --login-gemini`).
 
 ```bash
-# Set your credentials (see §7 for how to extract them)
+# Set your credentials (see §8 for how to extract them)
 GEMINI_TOKEN="<your-access-token>"
 GEMINI_PROJECT_ID="<your-project-id>"  # optional, discovered via loadCodeAssist
 ```
@@ -303,7 +304,70 @@ curl -s -X POST \
 
 ---
 
-## 5. OpenAI API (Admin Key)
+## 5. GitHub Copilot (Device Flow)
+
+**Auth:** GitHub OAuth token from Device Flow (`llmeter --login-copilot`).
+
+```bash
+# Set your GitHub OAuth token (see §8 for how to extract it)
+COPILOT_TOKEN="<your-github-oauth-token>"
+```
+
+### 5a. Fetch Usage (monthly quotas)
+
+```bash
+curl -s \
+  -H "Authorization: token $COPILOT_TOKEN" \
+  -H "Accept: application/json" \
+  -H "Editor-Version: vscode/1.96.2" \
+  -H "Editor-Plugin-Version: copilot-chat/0.26.7" \
+  -H "User-Agent: GitHubCopilotChat/0.26.7" \
+  -H "X-Github-Api-Version: 2025-04-01" \
+  "https://api.github.com/copilot_internal/user" | jq .
+```
+
+**Expected response shape:**
+
+```jsonc
+{
+  "login": "username",
+  "copilot_plan": "individual",          // "individual", "business", "enterprise"
+  "assigned_date": null,
+  "quota_reset_date": "2026-03-01",
+  "quota_reset_date_utc": "2026-03-01T00:00:00.000Z",
+  "quota_snapshots": {
+    "chat": {                            // unlimited — skipped by llmeter
+      "entitlement": 0,
+      "remaining": 0,
+      "percent_remaining": 100.0,
+      "quota_id": "chat",
+      "unlimited": true
+    },
+    "completions": {                     // unlimited — skipped by llmeter
+      "entitlement": 0,
+      "remaining": 0,
+      "percent_remaining": 100.0,
+      "quota_id": "completions",
+      "unlimited": true
+    },
+    "premium_interactions": {            // the one that matters
+      "entitlement": 300,                // total monthly quota
+      "remaining": 279,                  // remaining this month
+      "percent_remaining": 93.0,         // 0–100 (remaining, not used)
+      "quota_id": "premium_interactions",
+      "unlimited": false
+    }
+  }
+}
+```
+
+> **Note:** Only `premium_interactions` is tracked (chat/completions are unlimited).
+> `percent_remaining` is _remaining_ capacity. The app converts it:
+> `used_percent = 100 - percent_remaining`.
+
+---
+
+## 6. OpenAI API (Admin Key)
 
 **Auth:** OpenAI Admin API key (`sk-admin-...`). Set via `OPENAI_ADMIN_KEY` env var or in settings.
 
@@ -359,7 +423,7 @@ curl -s -G \
 
 ---
 
-## 6. Anthropic API (Admin Key)
+## 7. Anthropic API (Admin Key)
 
 **Auth:** Anthropic Admin API key (`sk-ant-admin01-...`). Set via `ANTHROPIC_ADMIN_KEY` env var or in settings.
 
@@ -409,7 +473,7 @@ curl -s -G \
 
 ---
 
-## 7. Extracting Tokens from auth.json
+## 8. Extracting Tokens from auth.json
 
 After running `llmeter --login-<provider>`, credentials are stored in
 `~/.config/llmeter/auth.json`. Here's how to extract them:
@@ -442,6 +506,12 @@ CURSOR_COOKIE=$(jq -r '.cursor.cookie' "$AUTH_FILE")
 ```bash
 GEMINI_TOKEN=$(jq -r '.["google-gemini-cli"].access' "$AUTH_FILE")
 GEMINI_PROJECT_ID=$(jq -r '.["google-gemini-cli"].projectId // empty' "$AUTH_FILE")
+```
+
+### GitHub Copilot
+
+```bash
+COPILOT_TOKEN=$(jq -r '.["github-copilot"].access' "$AUTH_FILE")
 ```
 
 ### OpenAI API / Anthropic API
@@ -520,6 +590,22 @@ if [[ -n "$GEMINI_TOKEN" ]]; then
     -H "Content-Type: application/json" \
     -d '{}' \
     "https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuota" | jq .
+else
+  echo "SKIP — no token"
+fi
+
+echo ""
+echo "=== GitHub Copilot ==="
+COPILOT_TOKEN=$(jq -r '.["github-copilot"].access // empty' "$AUTH_FILE" 2>/dev/null)
+if [[ -n "$COPILOT_TOKEN" ]]; then
+  curl -sw '\nHTTP %{http_code}\n' \
+    -H "Authorization: token $COPILOT_TOKEN" \
+    -H "Accept: application/json" \
+    -H "Editor-Version: vscode/1.96.2" \
+    -H "Editor-Plugin-Version: copilot-chat/0.26.7" \
+    -H "User-Agent: GitHubCopilotChat/0.26.7" \
+    -H "X-Github-Api-Version: 2025-04-01" \
+    "https://api.github.com/copilot_internal/user" | jq .
 else
   echo "SKIP — no token"
 fi

@@ -75,6 +75,16 @@ def main() -> None:
         action="store_true",
         help="Remove stored Gemini OAuth credentials.",
     )
+    parser.add_argument(
+        "--login-copilot",
+        action="store_true",
+        help="Authenticate with GitHub Copilot via Device Flow (one-time setup).",
+    )
+    parser.add_argument(
+        "--logout-copilot",
+        action="store_true",
+        help="Remove stored GitHub Copilot OAuth credentials.",
+    )
     args = parser.parse_args()
 
     if args.init_config:
@@ -153,6 +163,26 @@ def main() -> None:
             print("✓ Removed Gemini credentials.")
         else:
             print("No Gemini credentials stored.")
+        return
+
+    if args.login_copilot:
+        from .providers.copilot_oauth import interactive_login
+        try:
+            interactive_login()
+            from .config import enable_provider
+            enable_provider("copilot")
+        except (RuntimeError, KeyboardInterrupt) as e:
+            print(f"Login failed: {e}", file=sys.stderr)
+            sys.exit(1)
+        return
+
+    if args.logout_copilot:
+        from .providers.copilot_oauth import clear_credentials, load_credentials
+        if load_credentials():
+            clear_credentials()
+            print("✓ Removed Copilot credentials.")
+        else:
+            print("No Copilot credentials stored.")
         return
 
     from .config import load_config

@@ -191,4 +191,8 @@ PROVIDERS: dict[str, ProviderMeta] = {
         id="anthropic-api", name="Anthropic API", icon="◈", color="#d4a27f",
         primary_label="Spend",
     ),
+    "copilot": ProviderMeta(
+        id="copilot", name="Copilot", icon="⬠", color="#6e40c9",
+        primary_label="Premium (Monthly)",
+    ),
 }

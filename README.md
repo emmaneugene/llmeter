@@ -6,7 +6,7 @@ A CLI tool to monitor your LLM subscription and API limits.
 
 ## Features
 
-- **Multiple providers** — Codex, Claude, Gemini CLI quotas, OpenAI & Anthropic API billing
+- **Multiple providers** — Codex, Claude, Cursor, GitHub Copilot, and more
 - **Self-contained auth** — Login once with OAuth or manually enter cookies/API keys. No external dependencies.
 - **Interactive or static** — Color-coded usage bars with reset countdowns, auto-refreshing
 - **Config-driven** — JSON config controls which providers are shown and in what order
@@ -20,6 +20,7 @@ A CLI tool to monitor your LLM subscription and API limits.
 | **OpenAI ChatGPT** | `codex` | OAuth | `llmeter --login-codex` |
 | **Anthropic Claude** | `claude` | OAuth | `llmeter --login-claude` |
 | **Google Gemini** | `gemini` | OAuth | `llmeter --login-gemini` |
+| **GitHub Copilot** | `copilot` | OAuth (Device Flow) | `llmeter --login-copilot` |
 | **Cursor** | `cursor` | Cookie | `llmeter --login-cursor` |
 
 ### API usage
@@ -94,6 +95,7 @@ llmeter --init-config
     { "id": "codex" },
     { "id": "claude" },
     { "id": "gemini" },
+    { "id": "copilot" },
     { "id": "openai-api", "api_key": "sk-admin-...", "monthly_budget": 50.0 },
     { "id": "anthropic-api", "api_key": "sk-ant-admin01-...", "monthly_budget": 50.0 }
   ],
@@ -119,7 +121,7 @@ All OAuth credentials are stored in a single file:
 ~/.config/llmeter/auth.json
 ```
 
-Each provider stores its tokens under a provider key (`anthropic`, `openai-codex`, `google-gemini-cli`). Tokens are auto-refreshed on each run. The file is created with `0600` permissions.
+Each provider stores its tokens under a provider key (`anthropic`, `openai-codex`, `google-gemini-cli`, `github-copilot`). Tokens are auto-refreshed on each run where applicable. The file is created with `0600` permissions.
 
 ### Environment variables
 
