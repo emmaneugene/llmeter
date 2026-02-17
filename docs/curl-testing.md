@@ -3,7 +3,7 @@
 Quick-reference curl commands for manually testing each provider's API endpoints.
 
 > **Prerequisite:** You need valid credentials for each provider. Run the
-> corresponding `llmeter --login-<provider>` first, then extract tokens from
+> corresponding `llmeter --login <provider>` first, then extract tokens from
 > `~/.config/llmeter/auth.json`.
 
 ---
@@ -23,7 +23,7 @@ Quick-reference curl commands for manually testing each provider's API endpoints
 
 ## 1. Claude (OAuth)
 
-**Auth:** Bearer token from Claude OAuth flow (`llmeter --login-claude`).
+**Auth:** Bearer token from Claude OAuth flow (`llmeter --login claude`).
 
 ```bash
 # Set your access token (see §8 for how to extract it)
@@ -98,7 +98,7 @@ curl -s \
 
 ## 2. Codex / ChatGPT (OAuth)
 
-**Auth:** Bearer token + Account ID from OpenAI Codex OAuth flow (`llmeter --login-codex`).
+**Auth:** Bearer token + Account ID from OpenAI Codex OAuth flow (`llmeter --login codex`).
 
 ```bash
 # Set your credentials (see §8 for how to extract them)
@@ -146,7 +146,7 @@ curl -s \
 
 ## 3. Cursor (Cookie)
 
-**Auth:** Session cookie from browser (`llmeter --login-cursor`).
+**Auth:** Session cookie from browser (`llmeter --login cursor`).
 
 ```bash
 # Set your cookie (see §8 for how to extract it)
@@ -233,7 +233,7 @@ curl -s \
 
 ## 4. Gemini CLI (OAuth)
 
-**Auth:** Google OAuth Bearer token from Gemini CLI flow (`llmeter --login-gemini`).
+**Auth:** Google OAuth Bearer token from Gemini CLI flow (`llmeter --login gemini`).
 
 ```bash
 # Set your credentials (see §8 for how to extract them)
@@ -306,7 +306,7 @@ curl -s -X POST \
 
 ## 5. GitHub Copilot (Device Flow)
 
-**Auth:** GitHub OAuth token from Device Flow (`llmeter --login-copilot`).
+**Auth:** GitHub OAuth token from Device Flow (`llmeter --login copilot`).
 
 ```bash
 # Set your GitHub OAuth token (see §8 for how to extract it)
@@ -475,7 +475,7 @@ curl -s -G \
 
 ## 8. Extracting Tokens from auth.json
 
-After running `llmeter --login-<provider>`, credentials are stored in
+After running `llmeter --login <provider>`, credentials are stored in
 `~/.config/llmeter/auth.json`. Here's how to extract them:
 
 ```bash
@@ -660,7 +660,7 @@ fi
 
 | HTTP Status | Meaning | Fix |
 |---|---|---|
-| **401** | Token expired / invalid | Re-authenticate: `llmeter --login-<provider>` |
+| **401** | Token expired / invalid | Re-authenticate: `llmeter --login <provider>` |
 | **403** | Missing permissions / wrong key type | Use an admin key; re-login with correct scopes |
 | **429** | Rate limited | Wait and retry |
 | **404** | Endpoint not found | Check URL; API may have changed |

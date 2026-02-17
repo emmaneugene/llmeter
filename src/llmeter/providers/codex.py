@@ -1,6 +1,6 @@
 """Codex provider — fetches usage via direct OAuth API.
 
-Run `llmeter --login-codex` to authenticate once.  Tokens are refreshed
+Run `llmeter --login codex` to authenticate once.  Tokens are refreshed
 automatically from then on.
 """
 
@@ -33,7 +33,7 @@ async def fetch_codex(timeout: float = 20.0, settings: dict | None = None) -> Pr
     if creds is None:
         result.error = (
             "No Codex credentials found. "
-            "Run `llmeter --login-codex` to authenticate."
+            "Run `llmeter --login codex` to authenticate."
         )
         return result
 
@@ -71,7 +71,7 @@ async def fetch_codex(timeout: float = 20.0, settings: dict | None = None) -> Pr
                 if resp.status == 401:
                     raise RuntimeError(
                         "Unauthorized — token may be invalid or expired. "
-                        "Run `llmeter --login-codex` to re-authenticate."
+                        "Run `llmeter --login codex` to re-authenticate."
                     )
                 if resp.status != 200:
                     body = await resp.text()

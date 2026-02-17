@@ -11,7 +11,7 @@ under the key ``"github-copilot"``.
 with *no refresh token and no expiry*.  The token remains valid until
 the user revokes it in their GitHub settings.  There is no refresh
 mechanism — if the token stops working, the user must re-authenticate
-with ``llmeter --login-copilot``.
+with ``llmeter --login copilot``.
 """
 
 from __future__ import annotations

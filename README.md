@@ -17,11 +17,11 @@ A CLI tool to monitor your LLM subscription and API limits.
 
 | Provider | ID | How it works | Auth |
 |----------|----|-------------|------|
-| **OpenAI ChatGPT** | `codex` | OAuth | `llmeter --login-codex` |
-| **Anthropic Claude** | `claude` | OAuth | `llmeter --login-claude` |
-| **Google Gemini** | `gemini` | OAuth | `llmeter --login-gemini` |
-| **GitHub Copilot** | `copilot` | OAuth (Device Flow) | `llmeter --login-copilot` |
-| **Cursor** | `cursor` | Cookie | `llmeter --login-cursor` |
+| **OpenAI ChatGPT** | `codex` | OAuth | `llmeter --login codex` |
+| **Anthropic Claude** | `claude` | OAuth | `llmeter --login claude` |
+| **Google Gemini** | `gemini` | OAuth | `llmeter --login gemini` |
+| **GitHub Copilot** | `copilot` | OAuth (Device Flow) | `llmeter --login copilot` |
+| **Cursor** | `cursor` | Cookie | `llmeter --login cursor` |
 
 ### API usage
 

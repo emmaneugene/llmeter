@@ -330,7 +330,7 @@ async def refresh_access_token(creds: dict, timeout: float = 30.0) -> dict:
     """
     refresh_token = creds.get("refresh")
     if not refresh_token:
-        raise RuntimeError("No refresh token — run `llmeter --login-gemini` to re-authenticate.")
+        raise RuntimeError("No refresh token — run `llmeter --login gemini` to re-authenticate.")
 
     body = urlencode({
         "client_id": CLIENT_ID,

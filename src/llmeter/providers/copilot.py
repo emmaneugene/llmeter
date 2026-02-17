@@ -1,6 +1,6 @@
 """GitHub Copilot provider — fetches monthly premium request usage.
 
-Run ``llmeter --login-copilot`` to authenticate via GitHub Device Flow.
+Run ``llmeter --login copilot`` to authenticate via GitHub Device Flow.
 The GitHub OAuth token is used directly against the Copilot internal API.
 
 Only tracks ``premium_interactions`` (the limited monthly quota).
@@ -34,7 +34,7 @@ async def fetch_copilot(timeout: float = 30.0, settings: dict | None = None) -> 
     if not access_token:
         result.error = (
             "No Copilot credentials found. "
-            "Run `llmeter --login-copilot` to authenticate."
+            "Run `llmeter --login copilot` to authenticate."
         )
         return result
 
@@ -120,7 +120,7 @@ async def _fetch_copilot_user(access_token: str, timeout: float = 30.0) -> dict:
             if resp.status == 401:
                 raise RuntimeError(
                     "Unauthorized — token may be invalid or revoked. "
-                    "Run `llmeter --login-copilot` to re-authenticate."
+                    "Run `llmeter --login copilot` to re-authenticate."
                 )
             if resp.status == 403:
                 raise RuntimeError(

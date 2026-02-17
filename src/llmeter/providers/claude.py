@@ -1,6 +1,6 @@
 """Claude provider — fetches usage via OAuth API with automatic token refresh.
 
-Run `llmeter --login-claude` to authenticate once.  Tokens are refreshed
+Run `llmeter --login claude` to authenticate once.  Tokens are refreshed
 automatically from then on.
 """
 
@@ -34,7 +34,7 @@ async def fetch_claude(timeout: float = 30.0, settings: dict | None = None) -> P
     if not access_token:
         result.error = (
             "No Claude credentials found. "
-            "Run `llmeter --login-claude` to authenticate."
+            "Run `llmeter --login claude` to authenticate."
         )
         return result
 
@@ -138,14 +138,14 @@ async def _fetch_oauth_usage(access_token: str, timeout: float = 30.0) -> dict:
             if resp.status == 401:
                 raise RuntimeError(
                     "Unauthorized — token may be invalid or expired. "
-                    "Run `llmeter --login-claude` to re-authenticate."
+                    "Run `llmeter --login claude` to re-authenticate."
                 )
             if resp.status == 403:
                 body = await resp.text()
                 if "user:profile" in body:
                     raise RuntimeError(
                         "Token missing 'user:profile' scope. "
-                        "Re-authenticate with `llmeter --login-claude`."
+                        "Re-authenticate with `llmeter --login claude`."
                     )
                 raise RuntimeError(f"Forbidden (HTTP 403): {body[:200]}")
             if resp.status != 200:

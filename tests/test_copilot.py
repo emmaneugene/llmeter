@@ -108,7 +108,7 @@ class TestCopilotFetch:
     async def test_no_credentials(self, tmp_config_dir: Path) -> None:
         result = await fetch_copilot()
         assert result.error is not None
-        assert "login-copilot" in result.error
+        assert "--login copilot" in result.error
 
     async def test_successful_fetch(self, tmp_config_dir: Path) -> None:
         self._setup_creds(tmp_config_dir)

@@ -1,6 +1,6 @@
 """Cursor provider — fetches usage via cursor.com cookie-authenticated APIs.
 
-Run `llmeter --login-cursor` to paste your session cookie.  The cookie is
+Run `llmeter --login cursor` to paste your session cookie.  The cookie is
 stored in auth.json and reused until it expires (401/403).
 
 API endpoints (all cookie-authenticated):
@@ -40,7 +40,7 @@ async def fetch_cursor(timeout: float = 20.0, settings: dict | None = None) -> P
     if creds is None:
         result.error = (
             "No Cursor credentials found. "
-            "Run `llmeter --login-cursor` to authenticate."
+            "Run `llmeter --login cursor` to authenticate."
         )
         return result
 
@@ -84,7 +84,7 @@ async def fetch_cursor(timeout: float = 20.0, settings: dict | None = None) -> P
             cursor_auth.clear_credentials()
             result.error = (
                 "Cursor session expired. "
-                "Run `llmeter --login-cursor` to re-authenticate."
+                "Run `llmeter --login cursor` to re-authenticate."
             )
         else:
             result.error = f"Cursor API error: {e}"

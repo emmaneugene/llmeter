@@ -36,54 +36,14 @@ def main() -> None:
         help="Create a default config file and exit.",
     )
     parser.add_argument(
-        "--login-claude",
-        action="store_true",
-        help="Authenticate with Claude via OAuth (one-time setup).",
+        "--login",
+        metavar="PROVIDER",
+        help="Authenticate with an auth provider.",
     )
     parser.add_argument(
-        "--logout-claude",
-        action="store_true",
-        help="Remove stored Claude OAuth credentials.",
-    )
-    parser.add_argument(
-        "--login-codex",
-        action="store_true",
-        help="Authenticate with Codex via OAuth (one-time setup).",
-    )
-    parser.add_argument(
-        "--logout-codex",
-        action="store_true",
-        help="Remove stored Codex OAuth credentials.",
-    )
-    parser.add_argument(
-        "--login-cursor",
-        action="store_true",
-        help="Store Cursor session cookie (one-time setup).",
-    )
-    parser.add_argument(
-        "--logout-cursor",
-        action="store_true",
-        help="Remove stored Cursor session cookie.",
-    )
-    parser.add_argument(
-        "--login-gemini",
-        action="store_true",
-        help="Authenticate with Gemini via Google OAuth (one-time setup).",
-    )
-    parser.add_argument(
-        "--logout-gemini",
-        action="store_true",
-        help="Remove stored Gemini OAuth credentials.",
-    )
-    parser.add_argument(
-        "--login-copilot",
-        action="store_true",
-        help="Authenticate with GitHub Copilot via Device Flow (one-time setup).",
-    )
-    parser.add_argument(
-        "--logout-copilot",
-        action="store_true",
-        help="Remove stored GitHub Copilot OAuth credentials.",
+        "--logout",
+        metavar="PROVIDER",
+        help="Remove stored credentials for an auth provider.",
     )
     args = parser.parse_args()
 
@@ -92,97 +52,96 @@ def main() -> None:
         init_config()
         return
 
-    if args.login_claude:
+    if args.login and args.logout:
+        print("Specify only one of --login or --logout.", file=sys.stderr)
+        sys.exit(2)
+
+    def _enable_and_login(provider_id: str, login_func) -> None:
+        login_func()
+        from .config import enable_provider
+        enable_provider(provider_id)
+
+    def _clear_credentials(label: str, load_func, clear_func) -> None:
+        if load_func():
+            clear_func()
+            print(f"✓ Removed {label} credentials.")
+        else:
+            print(f"No {label} credentials stored.")
+
+    def _login_claude() -> None:
         from .providers.claude_oauth import interactive_login
-        try:
-            interactive_login()
-            from .config import enable_provider
-            enable_provider("claude")
-        except (RuntimeError, KeyboardInterrupt) as e:
-            print(f"Login failed: {e}", file=sys.stderr)
-            sys.exit(1)
-        return
+        _enable_and_login("claude", interactive_login)
 
-    if args.logout_claude:
-        from .providers.claude_oauth import clear_credentials, load_credentials
-        if load_credentials():
-            clear_credentials()
-            print("✓ Removed Claude credentials.")
-        else:
-            print("No Claude credentials stored.")
-        return
-
-    if args.login_codex:
+    def _login_codex() -> None:
         from .providers.codex_oauth import interactive_login
-        try:
-            interactive_login()
-            from .config import enable_provider
-            enable_provider("codex")
-        except (RuntimeError, KeyboardInterrupt) as e:
-            print(f"Login failed: {e}", file=sys.stderr)
-            sys.exit(1)
-        return
+        _enable_and_login("codex", interactive_login)
 
-    if args.logout_codex:
-        from .providers.codex_oauth import clear_credentials, load_credentials
-        if load_credentials():
-            clear_credentials()
-            print("✓ Removed Codex credentials.")
-        else:
-            print("No Codex credentials stored.")
-        return
-
-    if args.login_cursor:
-        _interactive_cursor_login()
-        return
-
-    if args.logout_cursor:
-        from .providers.cursor_auth import clear_credentials, load_credentials
-        if load_credentials():
-            clear_credentials()
-            print("✓ Removed Cursor credentials.")
-        else:
-            print("No Cursor credentials stored.")
-        return
-
-    if args.login_gemini:
+    def _login_gemini() -> None:
         from .providers.gemini_oauth import interactive_login
-        try:
-            interactive_login()
-            from .config import enable_provider
-            enable_provider("gemini")
-        except (RuntimeError, KeyboardInterrupt) as e:
-            print(f"Login failed: {e}", file=sys.stderr)
-            sys.exit(1)
-        return
+        _enable_and_login("gemini", interactive_login)
 
-    if args.logout_gemini:
-        from .providers.gemini_oauth import clear_credentials, load_credentials
-        if load_credentials():
-            clear_credentials()
-            print("✓ Removed Gemini credentials.")
-        else:
-            print("No Gemini credentials stored.")
-        return
-
-    if args.login_copilot:
+    def _login_copilot() -> None:
         from .providers.copilot_oauth import interactive_login
+        _enable_and_login("copilot", interactive_login)
+
+    def _logout_claude() -> None:
+        from .providers.claude_oauth import clear_credentials, load_credentials
+        _clear_credentials("Claude", load_credentials, clear_credentials)
+
+    def _logout_codex() -> None:
+        from .providers.codex_oauth import clear_credentials, load_credentials
+        _clear_credentials("Codex", load_credentials, clear_credentials)
+
+    def _logout_gemini() -> None:
+        from .providers.gemini_oauth import clear_credentials, load_credentials
+        _clear_credentials("Gemini", load_credentials, clear_credentials)
+
+    def _logout_copilot() -> None:
+        from .providers.copilot_oauth import clear_credentials, load_credentials
+        _clear_credentials("Copilot", load_credentials, clear_credentials)
+
+    def _logout_cursor() -> None:
+        from .providers.cursor_auth import clear_credentials, load_credentials
+        _clear_credentials("Cursor", load_credentials, clear_credentials)
+
+    login_handlers = {
+        "claude": _login_claude,
+        "codex": _login_codex,
+        "gemini": _login_gemini,
+        "copilot": _login_copilot,
+        "cursor": _interactive_cursor_login,
+    }
+
+    logout_handlers = {
+        "claude": _logout_claude,
+        "codex": _logout_codex,
+        "gemini": _logout_gemini,
+        "copilot": _logout_copilot,
+        "cursor": _logout_cursor,
+    }
+
+    if args.login:
+        provider = args.login.strip().lower()
+        handler = login_handlers.get(provider)
+        if not handler:
+            available = ", ".join(sorted(login_handlers))
+            print(f"Unknown provider for --login: {provider}. Choose one of: {available}", file=sys.stderr)
+            sys.exit(2)
         try:
-            interactive_login()
-            from .config import enable_provider
-            enable_provider("copilot")
+            handler()
         except (RuntimeError, KeyboardInterrupt) as e:
             print(f"Login failed: {e}", file=sys.stderr)
             sys.exit(1)
         return
 
-    if args.logout_copilot:
-        from .providers.copilot_oauth import clear_credentials, load_credentials
-        if load_credentials():
-            clear_credentials()
-            print("✓ Removed Copilot credentials.")
-        else:
-            print("No Copilot credentials stored.")
+    if args.logout:
+        provider = args.logout.strip().lower()
+        handler = logout_handlers.get(provider)
+        if not handler:
+            available = ", ".join(sorted(logout_handlers))
+            print(f"Unknown provider for --logout: {provider}. Choose one of: {available}", file=sys.stderr)
+            sys.exit(2)
+        handler()
         return
 
     from .config import load_config

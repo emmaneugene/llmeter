@@ -192,7 +192,7 @@ async def refresh_access_token(creds: dict, timeout: float = 30.0) -> dict:
     """
     refresh_token = creds.get("refresh")
     if not refresh_token:
-        raise RuntimeError("No refresh token available — run `llmeter --login-claude`.")
+        raise RuntimeError("No refresh token available — run `llmeter --login claude`.")
 
     payload = {
         "grant_type": "refresh_token",

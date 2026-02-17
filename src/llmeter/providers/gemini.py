@@ -1,6 +1,6 @@
 """Gemini provider — fetches usage via Google Cloud Code Private API.
 
-Run `llmeter --login-gemini` to authenticate once.  Tokens are refreshed
+Run `llmeter --login gemini` to authenticate once.  Tokens are refreshed
 automatically from then on.
 """
 
@@ -35,7 +35,7 @@ async def fetch_gemini(
     if creds is None:
         result.error = (
             "No Gemini credentials found. "
-            "Run `llmeter --login-gemini` to authenticate."
+            "Run `llmeter --login gemini` to authenticate."
         )
         return result
 
@@ -44,7 +44,7 @@ async def fetch_gemini(
     email = creds.get("email")
 
     if not access_token:
-        result.error = "Gemini access token missing. Run `llmeter --login-gemini` to authenticate."
+        result.error = "Gemini access token missing. Run `llmeter --login gemini` to authenticate."
         return result
 
     # Load Code Assist status (tier + project discovery)
@@ -191,7 +191,7 @@ async def _fetch_quota(
                 status=resp.status,
             )
             if resp.status == 401:
-                raise RuntimeError("Unauthorized — run `llmeter --login-gemini` to re-authenticate.")
+                raise RuntimeError("Unauthorized — run `llmeter --login gemini` to re-authenticate.")
             if resp.status != 200:
                 text = await resp.text()
                 raise RuntimeError(f"HTTP {resp.status}: {text[:200]}")
