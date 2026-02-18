@@ -24,7 +24,7 @@ from ..models import (
     RateWindow,
 )
 from . import cursor_auth
-from .helpers import http_get
+from .helpers import http_get, parse_iso8601
 
 BASE_URL = "https://cursor.com"
 USAGE_SUMMARY_URL = f"{BASE_URL}/api/usage-summary"
@@ -143,7 +143,7 @@ def _parse_usage_response(
     """Parse usage responses into ProviderResult."""
 
     # ── Billing cycle reset ─────────────────────────
-    billing_end = _parse_iso_date(data.get("billingCycleEnd"))
+    billing_end = parse_iso8601(data.get("billingCycleEnd"))
 
     # ── Check for legacy request-based plan ─────────
     requests_used, requests_limit = _parse_request_usage(request_data)
@@ -247,14 +247,3 @@ def _format_membership(membership: str) -> str:
     }
     return known.get(membership.lower(), f"Cursor {membership.capitalize()}")
 
-
-def _parse_iso_date(s: str | None) -> datetime | None:
-    """Parse an ISO 8601 date string, or None."""
-    if not s:
-        return None
-    try:
-        # Handle both "2025-01-01T00:00:00.000Z" and "2025-01-01T00:00:00Z"
-        s = s.replace("Z", "+00:00")
-        return datetime.fromisoformat(s)
-    except (ValueError, TypeError):
-        return None

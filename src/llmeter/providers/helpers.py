@@ -75,13 +75,6 @@ def _debug_log_path() -> Path:
     return config_dir("debug.log")
 
 
-def _redact_mapping(data: Mapping[str, Any] | None) -> dict[str, Any]:
-    """Return a plain copy of a mapping for debug logs."""
-    if not data:
-        return {}
-    return dict(data)
-
-
 def http_debug_log(
     provider: str,
     phase: str,
@@ -107,9 +100,9 @@ def http_debug_log(
     if status is not None:
         event["status"] = status
     if headers:
-        event["headers"] = _redact_mapping(headers)
+        event["headers"] = dict(headers)
     if payload:
-        event["payload"] = _redact_mapping(payload)
+        event["payload"] = dict(payload)
     if message:
         event["message"] = message
 
