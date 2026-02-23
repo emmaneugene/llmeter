@@ -9,88 +9,99 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Optional
 
-from ..models import (
+from ...models import (
     PROVIDERS,
     ProviderIdentity,
     ProviderResult,
     RateWindow,
 )
 from . import gemini_oauth
-from .helpers import parse_iso8601, http_post
+from ..helpers import parse_iso8601, http_post
+from .base import SubscriptionProvider
 
 QUOTA_ENDPOINT = "https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuota"
 LOAD_CODE_ASSIST_ENDPOINT = "https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist"
 
 
-async def fetch_gemini(
-    timeout: float = 30.0,
-    settings: dict | None = None,
-) -> ProviderResult:
-    """Fetch Gemini CLI usage quotas."""
-    result = PROVIDERS["gemini"].to_result(source="api")
+class GeminiProvider(SubscriptionProvider):
+    """Fetches Gemini CLI usage quotas."""
 
-    creds = await gemini_oauth.get_valid_credentials(timeout=timeout)
-    if creds is None:
-        result.error = (
+    @property
+    def provider_id(self) -> str:
+        return "gemini"
+
+    @property
+    def no_credentials_error(self) -> str:
+        return (
             "No Gemini credentials found. "
             "Run `llmeter --login gemini` to authenticate."
         )
-        return result
 
-    access_token = creds.get("access", "")
-    project_id = creds.get("projectId")
-    email = creds.get("email")
+    async def get_credentials(self, timeout: float) -> Optional[dict]:
+        return await gemini_oauth.get_valid_credentials(timeout=timeout)
 
-    if not access_token:
-        result.error = "Gemini access token missing. Run `llmeter --login gemini` to authenticate."
-        return result
+    async def _fetch(
+        self,
+        creds: dict,
+        timeout: float,
+        settings: dict,
+    ) -> ProviderResult:
+        result = PROVIDERS["gemini"].to_result(source="api")
 
-    # Load Code Assist status (tier + project discovery)
-    tier, discovered_project = await _load_code_assist(access_token, timeout)
-    if not project_id:
-        project_id = discovered_project
+        access_token = creds.get("access", "")
+        project_id = creds.get("projectId")
+        email = creds.get("email")
 
-    # Fetch quota
-    try:
-        quotas = await _fetch_quota(access_token, project_id, timeout)
-    except Exception as e:
-        result.error = f"Gemini API error: {e}"
-        return result
+        if not access_token:
+            result.error = "Gemini access token missing. Run `llmeter --login gemini` to authenticate."
+            return result
 
-    if not quotas:
-        result.error = "No quota data returned from Gemini API."
-        return result
+        # Load Code Assist status (tier + project discovery)
+        tier, discovered_project = await _load_code_assist(access_token, timeout)
+        if not project_id:
+            project_id = discovered_project
 
-    # Group by Pro vs Flash
-    pro_quotas = [(mid, frac, reset) for mid, frac, reset in quotas if "pro" in mid.lower()]
-    flash_quotas = [(mid, frac, reset) for mid, frac, reset in quotas if "flash" in mid.lower()]
+        # Fetch quota
+        try:
+            quotas = await _fetch_quota(access_token, project_id, timeout)
+        except Exception as e:
+            result.error = f"Gemini API error: {e}"
+            return result
 
-    if pro_quotas:
-        worst = min(pro_quotas, key=lambda x: x[1])
-        result.primary = RateWindow(
-            used_percent=max(0.0, 100.0 - worst[1] * 100.0),
-            window_minutes=24 * 60,
-            resets_at=worst[2],
+        if not quotas:
+            result.error = "No quota data returned from Gemini API."
+            return result
+
+        # Group by Pro vs Flash
+        pro_quotas = [(mid, frac, reset) for mid, frac, reset in quotas if "pro" in mid.lower()]
+        flash_quotas = [(mid, frac, reset) for mid, frac, reset in quotas if "flash" in mid.lower()]
+
+        if pro_quotas:
+            worst = min(pro_quotas, key=lambda x: x[1])
+            result.primary = RateWindow(
+                used_percent=max(0.0, 100.0 - worst[1] * 100.0),
+                window_minutes=24 * 60,
+                resets_at=worst[2],
+            )
+
+        if flash_quotas:
+            worst = min(flash_quotas, key=lambda x: x[1])
+            result.secondary = RateWindow(
+                used_percent=max(0.0, 100.0 - worst[1] * 100.0),
+                window_minutes=24 * 60,
+                resets_at=worst[2],
+            )
+
+        # Identity
+        plan = _tier_to_plan(tier)
+        result.identity = ProviderIdentity(
+            account_email=email,
+            login_method=plan,
         )
 
-    if flash_quotas:
-        worst = min(flash_quotas, key=lambda x: x[1])
-        result.secondary = RateWindow(
-            used_percent=max(0.0, 100.0 - worst[1] * 100.0),
-            window_minutes=24 * 60,
-            resets_at=worst[2],
-        )
-
-    # Identity
-    plan = _tier_to_plan(tier)
-    result.identity = ProviderIdentity(
-        account_email=email,
-        login_method=plan,
-    )
-
-    result.source = "oauth"
-    result.updated_at = datetime.now(timezone.utc)
-    return result
+        result.source = "oauth"
+        result.updated_at = datetime.now(timezone.utc)
+        return result
 
 
 # ── API Calls ──────────────────────────────────────────────
@@ -187,3 +198,7 @@ def _tier_to_plan(tier: Optional[str]) -> Optional[str]:
     if tier == "legacy-tier":
         return "Legacy"
     return None
+
+
+# Module-level singleton — used by backend.py and importable as a callable.
+fetch_gemini = GeminiProvider()

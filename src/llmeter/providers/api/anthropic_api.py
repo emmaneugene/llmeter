@@ -18,81 +18,90 @@ from typing import Optional
 
 import aiohttp
 
-from ..models import (
+from ...models import (
     CostInfo,
     PROVIDERS,
     ProviderResult,
     RateWindow,
 )
-from .helpers import http_get
+from ..helpers import http_get
+from .base import ApiProvider
 
 BASE_URL = "https://api.anthropic.com"
 COST_REPORT_URL = f"{BASE_URL}/v1/organizations/cost_report"
 API_VERSION = "2023-06-01"
 
-async def fetch_anthropic_api(
-    timeout: float = 30.0,
-    settings: dict | None = None,
-) -> ProviderResult:
-    """Fetch Anthropic API cost report for the current billing month."""
-    settings = settings or {}
 
-    result = PROVIDERS["anthropic-api"].to_result(source="api")
+class AnthropicApiProvider(ApiProvider):
+    """Fetches Anthropic API cost report for the current billing month."""
 
-    # Resolve API key — prefer admin key
-    api_key = (
-        settings.get("api_key")
-        or os.environ.get("ANTHROPIC_ADMIN_KEY")
-        or os.environ.get("ANTHROPIC_API_KEY")
-        or ""
-    ).strip()
-    if not api_key:
-        result.error = (
+    @property
+    def provider_id(self) -> str:
+        return "anthropic-api"
+
+    @property
+    def no_api_key_error(self) -> str:
+        return (
             "Anthropic API key not configured. "
             "Set ANTHROPIC_ADMIN_KEY env var or add api_key to config."
         )
+
+    def resolve_api_key(self, settings: dict) -> Optional[str]:
+        key = (
+            settings.get("api_key")
+            or os.environ.get("ANTHROPIC_ADMIN_KEY")
+            or os.environ.get("ANTHROPIC_API_KEY")
+            or ""
+        ).strip()
+        return key or None
+
+    async def _fetch(
+        self,
+        api_key: str,
+        timeout: float,
+        settings: dict,
+    ) -> ProviderResult:
+        result = PROVIDERS["anthropic-api"].to_result(source="api")
+        monthly_budget: float = settings.get("monthly_budget", 0.0)
+
+        # Current month boundaries (UTC)
+        now = datetime.now(timezone.utc)
+        month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        _, last_day = calendar.monthrange(now.year, now.month)
+        month_end = now.replace(day=last_day, hour=23, minute=59, second=59, microsecond=0)
+
+        try:
+            total_spend = await _fetch_cost_report(api_key, month_start, month_end, timeout)
+        except Exception as e:
+            result.error = f"Anthropic API error: {e}"
+            return result
+
+        # Show results
+        if monthly_budget > 0:
+            spend_pct = min(100.0, (total_spend / monthly_budget) * 100.0)
+            result.primary = RateWindow(
+                used_percent=spend_pct,
+                window_minutes=last_day * 24 * 60,
+            )
+            result.primary_label = f"${total_spend:,.2f} / ${monthly_budget:,.2f}"
+            result.cost = CostInfo(
+                used=total_spend,
+                limit=monthly_budget,
+                currency="USD",
+                period="Monthly",
+            )
+        else:
+            result.primary = RateWindow(used_percent=0.0)
+            result.primary_label = f"Spend: ${total_spend:,.2f} this month"
+            result.cost = CostInfo(
+                used=total_spend,
+                limit=0.0,
+                currency="USD",
+                period="Monthly",
+            )
+
+        result.updated_at = datetime.now(timezone.utc)
         return result
-
-    monthly_budget: float = settings.get("monthly_budget", 0.0)
-
-    # Current month boundaries (UTC)
-    now = datetime.now(timezone.utc)
-    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-    _, last_day = calendar.monthrange(now.year, now.month)
-    month_end = now.replace(day=last_day, hour=23, minute=59, second=59, microsecond=0)
-
-    try:
-        total_spend = await _fetch_cost_report(api_key, month_start, month_end, timeout)
-    except Exception as e:
-        result.error = f"Anthropic API error: {e}"
-        return result
-
-    # Show results
-    if monthly_budget > 0:
-        spend_pct = min(100.0, (total_spend / monthly_budget) * 100.0)
-        result.primary = RateWindow(
-            used_percent=spend_pct,
-            window_minutes=last_day * 24 * 60,
-        )
-        result.primary_label = f"${total_spend:,.2f} / ${monthly_budget:,.2f}"
-        result.cost = CostInfo(
-            used=total_spend,
-            limit=monthly_budget,
-            currency="USD",
-            period="Monthly",
-        )
-    else:
-        result.primary = RateWindow(used_percent=0.0)
-        result.primary_label = f"Spend: ${total_spend:,.2f} this month"
-        result.cost = CostInfo(
-            used=total_spend,
-            limit=0.0,
-            currency="USD",
-            period="Monthly",
-        )
-
-    result.updated_at = datetime.now(timezone.utc)
-    return result
 
 
 async def _fetch_cost_report(
@@ -157,3 +166,7 @@ async def _fetch_cost_report(
 
     # Convert cents to dollars
     return round(total_cents / 100.0, 2)
+
+
+# Module-level singleton — used by backend.py and importable as a callable.
+fetch_anthropic_api = AnthropicApiProvider()

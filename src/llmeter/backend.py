@@ -6,13 +6,13 @@ import asyncio
 from typing import Callable, Awaitable
 
 from .models import ProviderMeta, ProviderResult, PROVIDERS
-from .providers.codex import fetch_codex
-from .providers.claude import fetch_claude
-from .providers.cursor import fetch_cursor
-from .providers.gemini import fetch_gemini
-from .providers.openai_api import fetch_openai_api
-from .providers.anthropic_api import fetch_anthropic_api
-from .providers.copilot import fetch_copilot
+from .providers.subscription.codex import fetch_codex
+from .providers.subscription.claude import fetch_claude
+from .providers.subscription.cursor import fetch_cursor
+from .providers.subscription.gemini import fetch_gemini
+from .providers.subscription.copilot import fetch_copilot
+from .providers.api.openai_api import fetch_openai_api
+from .providers.api.anthropic_api import fetch_anthropic_api
 
 # Type for provider fetch functions.
 # All fetchers accept (timeout, settings) keyword args.

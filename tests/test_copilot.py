@@ -15,8 +15,8 @@ import pytest
 from aioresponses import aioresponses
 
 from llmeter import auth
-from llmeter.providers import copilot_oauth
-from llmeter.providers.copilot import fetch_copilot, COPILOT_USER_URL
+from llmeter.providers.subscription import copilot_oauth
+from llmeter.providers.subscription.copilot import fetch_copilot, COPILOT_USER_URL
 
 
 # ── 1. Credential persistence ─────────────────────────────

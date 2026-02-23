@@ -7,8 +7,9 @@ automatically from then on.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from typing import Optional
 
-from ..models import (
+from ...models import (
     CreditsInfo,
     PROVIDERS,
     ProviderIdentity,
@@ -16,55 +17,69 @@ from ..models import (
     RateWindow,
 )
 from . import codex_oauth
-from .helpers import http_get
+from ..helpers import http_get
+from .base import SubscriptionProvider
 
 # The correct endpoint, per CodexBar and codex-rs source:
 # https://chatgpt.com/backend-api/wham/usage
 USAGE_URL = "https://chatgpt.com/backend-api/wham/usage"
 
 
-async def fetch_codex(timeout: float = 20.0, settings: dict | None = None) -> ProviderResult:
-    """Fetch Codex usage via direct OAuth API."""
-    result = PROVIDERS["codex"].to_result()
+class CodexProvider(SubscriptionProvider):
+    """Fetches Codex usage via direct OAuth API."""
 
-    creds = await codex_oauth.get_valid_credentials(timeout=timeout)
-    if creds is None:
-        result.error = (
+    @property
+    def provider_id(self) -> str:
+        return "codex"
+
+    @property
+    def no_credentials_error(self) -> str:
+        return (
             "No Codex credentials found. "
             "Run `llmeter --login codex` to authenticate."
         )
+
+    async def get_credentials(self, timeout: float) -> Optional[dict]:
+        return await codex_oauth.get_valid_credentials(timeout=timeout)
+
+    async def _fetch(
+        self,
+        creds: dict,
+        timeout: float,
+        settings: dict,
+    ) -> ProviderResult:
+        result = PROVIDERS["codex"].to_result()
+
+        access_token = creds["access"]
+        account_id = creds["accountId"]
+
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "ChatGPT-Account-Id": account_id,
+            "User-Agent": "LLMeter/0.1.0",
+            "Accept": "application/json",
+        }
+
+        try:
+            data = await http_get(
+                "codex", USAGE_URL, headers, timeout,
+                label="usage",
+                errors={
+                    401: (
+                        "Unauthorized — token may be invalid or expired. "
+                        "Run `llmeter --login codex` to re-authenticate."
+                    ),
+                },
+            )
+        except Exception as e:
+            result.error = f"Codex API error: {e}"
+            return result
+
+        _parse_usage_response(data, result, email=creds.get("email"))
+
+        result.source = "oauth"
+        result.updated_at = datetime.now(timezone.utc)
         return result
-
-    access_token = creds["access"]
-    account_id = creds["accountId"]
-
-    headers = {
-        "Authorization": f"Bearer {access_token}",
-        "ChatGPT-Account-Id": account_id,
-        "User-Agent": "LLMeter/0.1.0",
-        "Accept": "application/json",
-    }
-
-    try:
-        data = await http_get(
-            "codex", USAGE_URL, headers, timeout,
-            label="usage",
-            errors={
-                401: (
-                    "Unauthorized — token may be invalid or expired. "
-                    "Run `llmeter --login codex` to re-authenticate."
-                ),
-            },
-        )
-    except Exception as e:
-        result.error = f"Codex API error: {e}"
-        return result
-
-    _parse_usage_response(data, result, email=creds.get("email"))
-
-    result.source = "oauth"
-    result.updated_at = datetime.now(timezone.utc)
-    return result
 
 
 # ── Response parsing ───────────────────────────────────────
@@ -159,3 +174,7 @@ def _parse_window(window: dict) -> RateWindow:
         window_minutes=window_mins,
         resets_at=resets_at,
     )
+
+
+# Module-level singleton — used by backend.py and importable as a callable.
+fetch_codex = CodexProvider()

@@ -10,8 +10,8 @@ from typing import Optional
 
 import aiohttp
 
-from .. import auth
-from .helpers import http_debug_log
+from ... import auth
+from ..helpers import http_debug_log
 
 # OAuth constants — Anthropic's shared public OAuth client ID,
 # used by Claude Code CLI, pi-mono, and llmeter alike.

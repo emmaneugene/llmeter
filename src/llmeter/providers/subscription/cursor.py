@@ -16,7 +16,7 @@ from typing import Optional
 
 import aiohttp
 
-from ..models import (
+from ...models import (
     CostInfo,
     PROVIDERS,
     ProviderIdentity,
@@ -24,88 +24,103 @@ from ..models import (
     RateWindow,
 )
 from . import cursor_auth
-from .helpers import http_get, parse_iso8601
+from ..helpers import http_get, parse_iso8601
+from .base import SubscriptionProvider
 
 BASE_URL = "https://cursor.com"
 USAGE_SUMMARY_URL = f"{BASE_URL}/api/usage-summary"
 AUTH_ME_URL = f"{BASE_URL}/api/auth/me"
 USAGE_URL = f"{BASE_URL}/api/usage"
 
-async def fetch_cursor(timeout: float = 20.0, settings: dict | None = None) -> ProviderResult:
-    """Fetch Cursor usage via cookie-authenticated APIs."""
-    result = PROVIDERS["cursor"].to_result()
 
-    creds = cursor_auth.load_credentials()
-    if creds is None:
-        result.error = (
+class CursorProvider(SubscriptionProvider):
+    """Fetches Cursor usage via cookie-authenticated APIs."""
+
+    @property
+    def provider_id(self) -> str:
+        return "cursor"
+
+    @property
+    def no_credentials_error(self) -> str:
+        return (
             "No Cursor credentials found. "
             "Run `llmeter --login cursor` to authenticate."
         )
-        return result
 
-    cookie = creds["cookie"]
-    headers = {
-        "Cookie": cookie,
-        "Accept": "application/json",
-        "User-Agent": "LLMeter/0.1.0",
-    }
+    async def get_credentials(self, timeout: float) -> Optional[dict]:
+        # Cursor auth is synchronous (reads a local file).
+        return cursor_auth.load_credentials()
 
-    try:
-        async with aiohttp.ClientSession() as session:
-            # Fetch usage summary (dollar-based)
-            usage_data = await http_get(
-                "cursor", USAGE_SUMMARY_URL, headers, timeout,
-                label="usage_summary", session=session,
-                errors={
-                    # "session expired" is a sentinel the exception handler
-                    # checks to know when to clear stored credentials.
-                    401: "Cursor session expired. Run `llmeter --login cursor` to re-authenticate.",
-                    403: "Cursor session expired. Run `llmeter --login cursor` to re-authenticate.",
-                },
-            )
+    async def _fetch(
+        self,
+        creds: dict,
+        timeout: float,
+        settings: dict,
+    ) -> ProviderResult:
+        result = PROVIDERS["cursor"].to_result()
+        cookie = creds["cookie"]
+        headers = {
+            "Cookie": cookie,
+            "Accept": "application/json",
+            "User-Agent": "LLMeter/0.1.0",
+        }
 
-            # Fetch user info (best-effort — needed for sub ID and email)
-            user_data = None
-            try:
-                user_data = await http_get(
-                    "cursor", AUTH_ME_URL, headers, timeout,
-                    label="auth_me", session=session,
+        try:
+            async with aiohttp.ClientSession() as session:
+                # Fetch usage summary (dollar-based)
+                usage_data = await http_get(
+                    "cursor", USAGE_SUMMARY_URL, headers, timeout,
+                    label="usage_summary", session=session,
+                    errors={
+                        # "session expired" is a sentinel the exception handler
+                        # checks to know when to clear stored credentials.
+                        401: "Cursor session expired. Run `llmeter --login cursor` to re-authenticate.",
+                        403: "Cursor session expired. Run `llmeter --login cursor` to re-authenticate.",
+                    },
                 )
-            except Exception:
-                pass
 
-            # Fetch legacy request usage if we have a user ID
-            request_data = None
-            if user_data and user_data.get("sub"):
+                # Fetch user info (best-effort — needed for sub ID and email)
+                user_data = None
                 try:
-                    url = f"{USAGE_URL}?user={user_data['sub']}"
-                    request_data = await http_get(
-                        "cursor", url, headers, timeout,
-                        label="usage", session=session,
+                    user_data = await http_get(
+                        "cursor", AUTH_ME_URL, headers, timeout,
+                        label="auth_me", session=session,
                     )
                 except Exception:
                     pass
 
-    except RuntimeError as e:
-        msg = str(e)
-        if "session expired" in msg:
-            # Cookie expired — clear it so user gets a clean prompt
-            cursor_auth.clear_credentials()
-        result.error = msg
+                # Fetch legacy request usage if we have a user ID
+                request_data = None
+                if user_data and user_data.get("sub"):
+                    try:
+                        url = f"{USAGE_URL}?user={user_data['sub']}"
+                        request_data = await http_get(
+                            "cursor", url, headers, timeout,
+                            label="usage", session=session,
+                        )
+                    except Exception:
+                        pass
+
+        except RuntimeError as e:
+            msg = str(e)
+            if "session expired" in msg:
+                # Cookie expired — clear it so user gets a clean prompt
+                cursor_auth.clear_credentials()
+            result.error = msg
+            return result
+        except Exception as e:
+            result.error = f"Cursor API error: {e}"
+            return result
+
+        _parse_usage_response(usage_data, user_data, request_data, result)
+
+        # Persist email if we learned it
+        if user_data and user_data.get("email") and not creds.get("email"):
+            cursor_auth.save_credentials(cookie, email=user_data["email"])
+
+        result.source = "cookie"
+        result.updated_at = datetime.now(timezone.utc)
         return result
-    except Exception as e:
-        result.error = f"Cursor API error: {e}"
-        return result
-
-    _parse_usage_response(usage_data, user_data, request_data, result)
-
-    # Persist email if we learned it
-    if user_data and user_data.get("email") and not creds.get("email"):
-        cursor_auth.save_credentials(cookie, email=user_data["email"])
-
-    result.source = "cookie"
-    result.updated_at = datetime.now(timezone.utc)
-    return result
 
 
 # ── Response parsing ───────────────────────────────────────
@@ -247,3 +262,6 @@ def _format_membership(membership: str) -> str:
     }
     return known.get(membership.lower(), f"Cursor {membership.capitalize()}")
 
+
+# Module-level singleton — used by backend.py and importable as a callable.
+fetch_cursor = CursorProvider()

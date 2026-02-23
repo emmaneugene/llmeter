@@ -21,8 +21,8 @@ from typing import Optional
 
 import aiohttp
 
-from .. import auth
-from .helpers import http_debug_log
+from ... import auth
+from ..helpers import http_debug_log
 
 # ── OAuth constants ────────────────────────────────────────
 # VS Code's Copilot extension client ID (public, embedded in extension).

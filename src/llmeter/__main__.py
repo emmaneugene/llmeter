@@ -69,39 +69,39 @@ def main() -> None:
             print(f"No {label} credentials stored.")
 
     def _login_claude() -> None:
-        from .providers.claude_oauth import interactive_login
+        from .providers.subscription.claude_oauth import interactive_login
         _enable_and_login("claude", interactive_login)
 
     def _login_codex() -> None:
-        from .providers.codex_oauth import interactive_login
+        from .providers.subscription.codex_oauth import interactive_login
         _enable_and_login("codex", interactive_login)
 
     def _login_gemini() -> None:
-        from .providers.gemini_oauth import interactive_login
+        from .providers.subscription.gemini_oauth import interactive_login
         _enable_and_login("gemini", interactive_login)
 
     def _login_copilot() -> None:
-        from .providers.copilot_oauth import interactive_login
+        from .providers.subscription.copilot_oauth import interactive_login
         _enable_and_login("copilot", interactive_login)
 
     def _logout_claude() -> None:
-        from .providers.claude_oauth import clear_credentials, load_credentials
+        from .providers.subscription.claude_oauth import clear_credentials, load_credentials
         _clear_credentials("Claude", load_credentials, clear_credentials)
 
     def _logout_codex() -> None:
-        from .providers.codex_oauth import clear_credentials, load_credentials
+        from .providers.subscription.codex_oauth import clear_credentials, load_credentials
         _clear_credentials("Codex", load_credentials, clear_credentials)
 
     def _logout_gemini() -> None:
-        from .providers.gemini_oauth import clear_credentials, load_credentials
+        from .providers.subscription.gemini_oauth import clear_credentials, load_credentials
         _clear_credentials("Gemini", load_credentials, clear_credentials)
 
     def _logout_copilot() -> None:
-        from .providers.copilot_oauth import clear_credentials, load_credentials
+        from .providers.subscription.copilot_oauth import clear_credentials, load_credentials
         _clear_credentials("Copilot", load_credentials, clear_credentials)
 
     def _logout_cursor() -> None:
-        from .providers.cursor_auth import clear_credentials, load_credentials
+        from .providers.subscription.cursor_auth import clear_credentials, load_credentials
         _clear_credentials("Cursor", load_credentials, clear_credentials)
 
     login_handlers = {
@@ -286,7 +286,7 @@ def _rich_bar(used_pct: float, width: int = 20) -> str:
 
 def _interactive_cursor_login() -> None:
     """Interactive Cursor cookie login flow."""
-    from .providers.cursor_auth import load_credentials, save_credentials
+    from .providers.subscription.cursor_auth import load_credentials, save_credentials
 
     existing = load_credentials()
     if existing:

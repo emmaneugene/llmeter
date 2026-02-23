@@ -16,8 +16,8 @@ import pytest
 from aioresponses import aioresponses
 
 from llmeter import auth
-from llmeter.providers import gemini_oauth
-from llmeter.providers.gemini import fetch_gemini, _fetch_quota, _load_code_assist, _tier_to_plan
+from llmeter.providers.subscription import gemini_oauth
+from llmeter.providers.subscription.gemini import fetch_gemini, _fetch_quota, _load_code_assist, _tier_to_plan
 
 
 QUOTA_URL = "https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuota"

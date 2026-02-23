@@ -22,8 +22,8 @@ from urllib.parse import urlencode, urlparse, parse_qs
 
 import aiohttp
 
-from .. import auth
-from .helpers import http_debug_log
+from ... import auth
+from ..helpers import http_debug_log
 
 # ── OAuth constants (same as Gemini CLI / pi-mono) ─────────
 # Decoded from base64 for consistency with pi-mono's approach.

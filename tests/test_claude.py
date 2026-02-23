@@ -16,8 +16,8 @@ import pytest
 from aioresponses import aioresponses
 
 from llmeter import auth
-from llmeter.providers import claude_oauth
-from llmeter.providers.claude import fetch_claude
+from llmeter.providers.subscription import claude_oauth
+from llmeter.providers.subscription.claude import fetch_claude
 
 
 # ── 1. Credential generation / persistence ─────────────────

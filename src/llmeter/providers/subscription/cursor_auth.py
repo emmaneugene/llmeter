@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from .. import auth
+from ... import auth
 
 PROVIDER_KEY = "cursor"
 

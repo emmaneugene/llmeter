@@ -1,0 +1,196 @@
+"""Claude provider — fetches usage via OAuth API with automatic token refresh.
+
+Run `llmeter --login claude` to authenticate once.  Tokens are refreshed
+automatically from then on.
+"""
+
+from __future__ import annotations
+
+from datetime import datetime, timezone
+from typing import Optional
+
+from ...models import (
+    CostInfo,
+    PROVIDERS,
+    ProviderIdentity,
+    ProviderResult,
+    RateWindow,
+)
+from . import claude_oauth
+from ..helpers import parse_iso8601, http_get
+from .base import SubscriptionProvider
+
+OAUTH_USAGE_URL = "https://api.anthropic.com/api/oauth/usage"
+OAUTH_PROFILE_URL = "https://api.anthropic.com/api/oauth/profile"
+BETA_HEADER = "oauth-2025-04-20"
+
+_CLAUDE_HEADERS = lambda token: {  # noqa: E731
+    "Authorization": f"Bearer {token}",
+    "Accept": "application/json",
+    "Content-Type": "application/json",
+    "anthropic-beta": BETA_HEADER,
+    "User-Agent": "LLMeter/0.1.0",
+}
+
+
+class ClaudeProvider(SubscriptionProvider):
+    """Fetches Claude usage via the OAuth usage API."""
+
+    @property
+    def provider_id(self) -> str:
+        return "claude"
+
+    @property
+    def no_credentials_error(self) -> str:
+        return (
+            "No Claude credentials found. "
+            "Run `llmeter --login claude` to authenticate."
+        )
+
+    async def get_credentials(self, timeout: float) -> Optional[str]:
+        return await claude_oauth.get_valid_access_token(timeout=timeout)
+
+    async def _fetch(
+        self,
+        creds: str,
+        timeout: float,
+        settings: dict,
+    ) -> ProviderResult:
+        access_token = creds
+        result = PROVIDERS["claude"].to_result()
+
+        # --- Fetch usage ---
+        try:
+            usage = await http_get(
+                "claude", OAUTH_USAGE_URL, _CLAUDE_HEADERS(access_token), timeout,
+                label="usage",
+                errors={
+                    401: (
+                        "Unauthorized — token may be invalid or expired. "
+                        "Run `llmeter --login claude` to re-authenticate."
+                    ),
+                    403: (
+                        "Forbidden — token may be missing required scopes. "
+                        "Re-authenticate with `llmeter --login claude`."
+                    ),
+                },
+            )
+        except Exception as e:
+            result.error = f"Claude API error: {e}"
+            return result
+
+        # --- Parse windows ---
+        five_hour = usage.get("five_hour")
+        if five_hour and five_hour.get("utilization") is not None:
+            result.primary = RateWindow(
+                used_percent=five_hour["utilization"],
+                window_minutes=5 * 60,
+                resets_at=parse_iso8601(five_hour.get("resets_at")),
+            )
+        else:
+            result.error = "Claude API returned no session usage data."
+            return result
+
+        seven_day = usage.get("seven_day")
+        if seven_day and seven_day.get("utilization") is not None:
+            result.secondary = RateWindow(
+                used_percent=seven_day["utilization"],
+                window_minutes=7 * 24 * 60,
+                resets_at=parse_iso8601(seven_day.get("resets_at")),
+            )
+
+        for key in ("seven_day_sonnet", "seven_day_opus"):
+            model_window = usage.get(key)
+            if model_window and model_window.get("utilization") is not None:
+                result.tertiary = RateWindow(
+                    used_percent=model_window["utilization"],
+                    window_minutes=7 * 24 * 60,
+                    resets_at=parse_iso8601(model_window.get("resets_at")),
+                )
+                result.tertiary_label = "Sonnet" if "sonnet" in key else "Opus"
+                break
+
+        # Extra usage (cost info)
+        extra = usage.get("extra_usage")
+        if extra and extra.get("is_enabled"):
+            used = extra.get("used_credits")
+            limit = extra.get("monthly_limit")
+            if used is not None and limit is not None:
+                result.cost = CostInfo(
+                    used=used / 100.0,
+                    limit=limit / 100.0,
+                    currency=extra.get("currency", "USD") or "USD",
+                )
+
+        # Identity
+        profile = await _fetch_account_info(access_token, timeout=timeout)
+        if profile:
+            result.identity = ProviderIdentity(
+                account_email=profile.get("email"),
+                login_method=profile.get("plan"),
+            )
+
+        result.source = "oauth"
+        result.updated_at = datetime.now(timezone.utc)
+        return result
+
+
+# ── API calls ──────────────────────────────────────────────
+
+async def _fetch_account_info(
+    access_token: str,
+    timeout: float = 30.0,
+) -> Optional[dict]:
+    """Fetch account email and plan from the OAuth profile endpoint."""
+    try:
+        data = await http_get(
+            "claude", OAUTH_PROFILE_URL, _CLAUDE_HEADERS(access_token), min(timeout, 10),
+            label="profile",
+        )
+    except Exception:
+        return None
+
+    result: dict = {}
+
+    account = data.get("account")
+    if isinstance(account, dict):
+        email = (account.get("email") or "").strip()
+        if email:
+            result["email"] = email
+        if account.get("has_claude_max"):
+            result["plan"] = "Claude Max"
+        elif account.get("has_claude_pro"):
+            result["plan"] = "Claude Pro"
+
+    org = data.get("organization")
+    if isinstance(org, dict) and not result.get("plan"):
+        plan = _infer_plan_from_org(
+            (org.get("organization_type") or "").strip(),
+            (org.get("billing_type") or "").strip(),
+            (org.get("rate_limit_tier") or "").strip(),
+        )
+        if plan:
+            result["plan"] = plan
+
+    return result if result else None
+
+
+def _infer_plan_from_org(org_type: str, billing: str = "", tier: str = "") -> Optional[str]:
+    """Infer Claude plan from organization metadata."""
+    for label, keywords in [
+        ("Claude Max", ["max"]),
+        ("Claude Pro", ["pro"]),
+        ("Claude Team", ["team"]),
+        ("Claude Enterprise", ["enterprise"]),
+    ]:
+        if any(k in org_type.lower() for k in keywords):
+            return label
+        if any(k in tier.lower() for k in keywords):
+            return label
+    if "stripe" in billing.lower():
+        return "Claude Pro"
+    return None
+
+
+# Module-level singleton — used by backend.py and importable as a callable.
+fetch_claude = ClaudeProvider()

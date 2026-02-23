@@ -19,8 +19,8 @@ from urllib.parse import urlencode, urlparse, parse_qs
 
 import aiohttp
 
-from .. import auth
-from .helpers import decode_jwt_payload, http_debug_log
+from ... import auth
+from ..helpers import decode_jwt_payload, http_debug_log
 
 # OAuth constants (same OpenAI Codex OAuth app as Codex CLI / pi-mono)
 CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann"

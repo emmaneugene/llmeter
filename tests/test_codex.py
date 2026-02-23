@@ -16,8 +16,8 @@ import pytest
 from aioresponses import aioresponses
 
 from llmeter import auth
-from llmeter.providers import codex_oauth
-from llmeter.providers.codex import fetch_codex, USAGE_URL
+from llmeter.providers.subscription import codex_oauth
+from llmeter.providers.subscription.codex import fetch_codex, USAGE_URL
 
 
 # ── 1. Credential generation / persistence ─────────────────

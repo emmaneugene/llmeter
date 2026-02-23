@@ -14,8 +14,8 @@ from pathlib import Path
 import pytest
 from aioresponses import aioresponses
 
-from llmeter.providers import cursor_auth
-from llmeter.providers.cursor import (
+from llmeter.providers.subscription import cursor_auth
+from llmeter.providers.subscription.cursor import (
     fetch_cursor,
     USAGE_SUMMARY_URL,
     USAGE_URL,
