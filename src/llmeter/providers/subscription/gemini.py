@@ -7,7 +7,6 @@ automatically from then on.
 from __future__ import annotations
 
 import base64
-import os
 import time
 from datetime import datetime, timezone
 from typing import Optional
@@ -223,7 +222,7 @@ class GeminiProvider(SubscriptionProvider):
         try:
             quotas = await _fetch_quota(access_token, project_id, timeout)
         except Exception as e:
-            result.error = f"Gemini API error: {e}"
+            result.error = f"Gemini API error: {e or type(e).__name__}"
             return result
 
         if not quotas:

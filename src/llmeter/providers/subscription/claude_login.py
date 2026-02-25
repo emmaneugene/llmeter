@@ -19,7 +19,6 @@ from .claude import (
     TOKEN_URL,
     REDIRECT_URI,
     SCOPES,
-    PROVIDER_ID,
     _now_ms,
     save_credentials,
 )
@@ -94,7 +93,7 @@ class ClaudeLogin(LoginProvider):
         try:
             token_data = asyncio.run(_exchange_code(payload))
         except Exception as e:
-            raise RuntimeError(f"Token exchange failed: {e}") from e
+            raise RuntimeError(f"Token exchange failed: {e or type(e).__name__}") from e
 
         creds = {
             "type": "oauth",

@@ -119,7 +119,7 @@ class OpencodeProvider(ApiProvider):
                         return result
                     html = await resp.text()
         except aiohttp.ClientError as e:
-            result.error = f"opencode.ai request failed: {e}"
+            result.error = f"opencode.ai request failed: {e or type(e).__name__}"
             return result
 
         _parse_html(

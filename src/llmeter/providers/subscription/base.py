@@ -70,7 +70,7 @@ class SubscriptionProvider(ABC):
         try:
             return await self._fetch(creds, timeout=timeout, settings=settings)
         except Exception as e:
-            result.error = str(e)
+            result.error = str(e) or type(e).__name__
             return result
 
 

@@ -6,8 +6,6 @@ automatically from then on.
 
 from __future__ import annotations
 
-import base64
-import json
 import time
 from datetime import datetime, timezone
 from typing import Optional
@@ -223,7 +221,7 @@ class CodexProvider(SubscriptionProvider):
                 },
             )
         except Exception as e:
-            result.error = f"Codex API error: {e}"
+            result.error = f"Codex API error: {e or type(e).__name__}"
             return result
 
         _parse_usage_response(data, result, email=creds.get("email"))

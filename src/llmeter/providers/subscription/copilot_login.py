@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import time
 import webbrowser
-from typing import Optional
 
 import aiohttp
 
@@ -54,7 +53,7 @@ class CopilotLogin(LoginProvider):
         try:
             token = asyncio.run(_poll_for_token(device_code, interval))
         except Exception as e:
-            raise RuntimeError(f"Device flow failed: {e}") from e
+            raise RuntimeError(f"Device flow failed: {e or type(e).__name__}") from e
 
         creds = {"type": "oauth", "access": token}
         save_credentials(creds)

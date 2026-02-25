@@ -101,7 +101,7 @@ class CopilotProvider(SubscriptionProvider):
             result.error = msg
             return result
         except Exception as e:
-            result.error = f"Copilot API error: {e}"
+            result.error = f"Copilot API error: {e or type(e).__name__}"
             return result
 
         quota_snapshots = data.get("quota_snapshots") or {}

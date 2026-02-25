@@ -142,7 +142,7 @@ def load_config() -> AppConfig:
 
         cfg.providers = valid
         return cfg
-    except (json.JSONDecodeError, KeyError, TypeError, ValueError) as e:
+    except (json.JSONDecodeError, KeyError, TypeError, ValueError, OSError) as e:
         import sys
         print(f"llmeter: bad config ({path}): {e} — using defaults", file=sys.stderr)
         return AppConfig.default()

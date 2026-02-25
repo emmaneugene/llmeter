@@ -181,7 +181,7 @@ class ClaudeProvider(SubscriptionProvider):
                 },
             )
         except Exception as e:
-            result.error = f"Claude API error: {e}"
+            result.error = f"Claude API error: {e or type(e).__name__}"
             return result
 
         five_hour = usage.get("five_hour")

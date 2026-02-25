@@ -135,7 +135,7 @@ class CursorProvider(SubscriptionProvider):
             result.error = msg
             return result
         except Exception as e:
-            result.error = f"Cursor API error: {e}"
+            result.error = f"Cursor API error: {e or type(e).__name__}"
             return result
 
         _parse_usage_response(usage_data, user_data, request_data, result)

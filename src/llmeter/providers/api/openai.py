@@ -76,7 +76,7 @@ class OpenAIApiProvider(ApiProvider):
         try:
             total_spend = await _fetch_costs(api_key, start_ts, end_ts, timeout)
         except Exception as e:
-            result.error = f"OpenAI API error: {e}"
+            result.error = f"OpenAI API error: {e or type(e).__name__}"
             return result
 
         # Show as cost bar if budget is set, otherwise just cost info

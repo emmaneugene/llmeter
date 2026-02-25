@@ -237,7 +237,7 @@ def _exchange_code_sync(code: str, verifier: str) -> dict:
         with urllib.request.urlopen(req, timeout=30) as resp:
             return json.loads(resp.read())
     except Exception as e:
-        raise RuntimeError(f"Token exchange failed: {e}") from e
+        raise RuntimeError(f"Token exchange failed: {e or type(e).__name__}") from e
 
 
 # ── Project discovery ──────────────────────────────────────

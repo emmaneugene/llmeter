@@ -66,7 +66,7 @@ async def fetch_one(
             kwargs["settings"] = settings
         return await fetcher(**kwargs)
     except Exception as e:
-        return meta.to_result(provider_id=provider_id, error=str(e))
+        return meta.to_result(provider_id=provider_id, error=str(e) or type(e).__name__)
 
 
 async def fetch_all(

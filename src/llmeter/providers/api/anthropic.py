@@ -78,7 +78,7 @@ class AnthropicApiProvider(ApiProvider):
         try:
             total_spend = await _fetch_cost_report(api_key, month_start, month_end, timeout)
         except Exception as e:
-            result.error = f"Anthropic API error: {e}"
+            result.error = f"Anthropic API error: {e or type(e).__name__}"
             return result
 
         # Show results

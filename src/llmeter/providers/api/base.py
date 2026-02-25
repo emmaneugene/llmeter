@@ -69,5 +69,5 @@ class ApiProvider(ABC):
         try:
             return await self._fetch(api_key, timeout=timeout, settings=settings)
         except Exception as e:
-            result.error = f"{self.provider_id} API error: {e}"
+            result.error = f"{self.provider_id} API error: {e or type(e).__name__}"
             return result
