@@ -14,8 +14,10 @@ from pathlib import Path
 import pytest
 from aioresponses import aioresponses
 
-from llmeter.providers.subscription import cursor_auth
 from llmeter.providers.subscription.cursor import (
+    save_credentials,
+    load_credentials,
+    clear_credentials,
     fetch_cursor,
     USAGE_SUMMARY_URL,
     USAGE_URL,
@@ -34,33 +36,33 @@ class TestCursorCredentials:
     """Test cookie credential storage via the unified auth store."""
 
     def test_save_and_load(self, tmp_config_dir: Path) -> None:
-        cursor_auth.save_credentials(
+        save_credentials(
             "WorkosCursorSessionToken=abc123; other=val",
             email="user@example.com",
         )
-        loaded = cursor_auth.load_credentials()
+        loaded = load_credentials()
         assert loaded is not None
         assert loaded["type"] == "cookie"
         assert loaded["cookie"] == "WorkosCursorSessionToken=abc123; other=val"
         assert loaded["email"] == "user@example.com"
 
     def test_load_returns_none_when_empty(self, tmp_config_dir: Path) -> None:
-        assert cursor_auth.load_credentials() is None
+        assert load_credentials() is None
 
     def test_load_requires_cookie_field(self, tmp_config_dir: Path) -> None:
         """Credentials without a cookie value should be treated as invalid."""
         from llmeter import auth
         auth.save_provider("cursor", {"type": "cookie", "cookie": ""})
-        assert cursor_auth.load_credentials() is None
+        assert load_credentials() is None
 
     def test_clear_credentials(self, tmp_config_dir: Path) -> None:
-        cursor_auth.save_credentials("token=abc")
-        cursor_auth.clear_credentials()
-        assert cursor_auth.load_credentials() is None
+        save_credentials("token=abc")
+        clear_credentials()
+        assert load_credentials() is None
 
     def test_save_without_email(self, tmp_config_dir: Path) -> None:
-        cursor_auth.save_credentials("token=abc")
-        loaded = cursor_auth.load_credentials()
+        save_credentials("token=abc")
+        loaded = load_credentials()
         assert loaded is not None
         assert "email" not in loaded
 
@@ -70,11 +72,11 @@ class TestCursorCredentials:
         auth.save_provider("anthropic", {
             "type": "oauth", "access": "x", "refresh": "y", "expires": 0,
         })
-        cursor_auth.save_credentials("token=abc", email="me@x.com")
+        save_credentials("token=abc", email="me@x.com")
 
         # Both should be loadable
         assert auth.load_provider("anthropic") is not None
-        assert cursor_auth.load_credentials() is not None
+        assert load_credentials() is not None
 
 
 # ── 2. Usage endpoint calls ────────────────────────────────
@@ -143,7 +145,7 @@ class TestCursorUsageEndpoint:
     """Test the cookie-authenticated API calls."""
 
     async def test_fetch_with_valid_cookie(self, tmp_config_dir: Path) -> None:
-        cursor_auth.save_credentials("WorkosCursorSessionToken=valid")
+        save_credentials("WorkosCursorSessionToken=valid")
 
         with aioresponses() as mocked:
             mocked.get(USAGE_SUMMARY_URL, payload=SAMPLE_USAGE_SUMMARY)
@@ -161,7 +163,7 @@ class TestCursorUsageEndpoint:
 
     async def test_fetch_enterprise_with_requests(self, tmp_config_dir: Path) -> None:
         """Enterprise plan should use request counts, not dollar amounts."""
-        cursor_auth.save_credentials("WorkosCursorSessionToken=valid")
+        save_credentials("WorkosCursorSessionToken=valid")
 
         with aioresponses() as mocked:
             mocked.get(USAGE_SUMMARY_URL, payload=SAMPLE_ENTERPRISE_SUMMARY)
@@ -185,7 +187,7 @@ class TestCursorUsageEndpoint:
         assert "No Cursor credentials" in result.error
 
     async def test_fetch_clears_on_401(self, tmp_config_dir: Path) -> None:
-        cursor_auth.save_credentials("expired=cookie")
+        save_credentials("expired=cookie")
 
         with aioresponses() as mocked:
             mocked.get(USAGE_SUMMARY_URL, status=401)
@@ -194,10 +196,10 @@ class TestCursorUsageEndpoint:
 
         assert result.error is not None
         assert "expired" in result.error.lower()
-        assert cursor_auth.load_credentials() is None
+        assert load_credentials() is None
 
     async def test_fetch_clears_on_403(self, tmp_config_dir: Path) -> None:
-        cursor_auth.save_credentials("forbidden=cookie")
+        save_credentials("forbidden=cookie")
 
         with aioresponses() as mocked:
             mocked.get(USAGE_SUMMARY_URL, status=403)
@@ -205,11 +207,11 @@ class TestCursorUsageEndpoint:
             result = await fetch_cursor(timeout=5.0)
 
         assert result.error is not None
-        assert cursor_auth.load_credentials() is None
+        assert load_credentials() is None
 
     async def test_fetch_persists_email(self, tmp_config_dir: Path) -> None:
         """Should save email to auth.json after learning it from /auth/me."""
-        cursor_auth.save_credentials("WorkosCursorSessionToken=tok")
+        save_credentials("WorkosCursorSessionToken=tok")
 
         with aioresponses() as mocked:
             mocked.get(USAGE_SUMMARY_URL, payload=SAMPLE_USAGE_SUMMARY)
@@ -218,13 +220,13 @@ class TestCursorUsageEndpoint:
 
             result = await fetch_cursor(timeout=10.0)
 
-        creds = cursor_auth.load_credentials()
+        creds = load_credentials()
         assert creds is not None
         assert creds["email"] == "user@example.com"
 
     async def test_fetch_survives_auth_me_failure(self, tmp_config_dir: Path) -> None:
         """Should still return usage if /auth/me fails."""
-        cursor_auth.save_credentials("WorkosCursorSessionToken=tok")
+        save_credentials("WorkosCursorSessionToken=tok")
 
         with aioresponses() as mocked:
             mocked.get(USAGE_SUMMARY_URL, payload=SAMPLE_USAGE_SUMMARY)

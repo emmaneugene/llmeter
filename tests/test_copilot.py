@@ -15,8 +15,13 @@ import pytest
 from aioresponses import aioresponses
 
 from llmeter import auth
-from llmeter.providers.subscription import copilot_oauth
-from llmeter.providers.subscription.copilot import fetch_copilot, COPILOT_USER_URL
+from llmeter.providers.subscription.copilot import (
+    save_credentials,
+    load_credentials,
+    clear_credentials,
+    fetch_copilot,
+    COPILOT_USER_URL,
+)
 
 
 # ── 1. Credential persistence ─────────────────────────────
@@ -30,9 +35,9 @@ class TestCopilotCredentials:
             "type": "oauth",
             "access": "gho_test_token_123",
         }
-        copilot_oauth.save_credentials(creds)
+        save_credentials(creds)
 
-        loaded = copilot_oauth.load_credentials()
+        loaded = load_credentials()
         assert loaded is not None
         assert loaded["access"] == "gho_test_token_123"
         # GitHub device flow tokens have no refresh token or expiry
@@ -40,24 +45,24 @@ class TestCopilotCredentials:
         assert "expires" not in loaded
 
     def test_load_returns_none_when_empty(self, tmp_config_dir: Path) -> None:
-        assert copilot_oauth.load_credentials() is None
+        assert load_credentials() is None
 
     def test_clear_credentials(self, tmp_config_dir: Path) -> None:
-        copilot_oauth.save_credentials({
+        save_credentials({
             "type": "oauth",
             "access": "tok",
         })
-        assert copilot_oauth.load_credentials() is not None
+        assert load_credentials() is not None
 
-        copilot_oauth.clear_credentials()
-        assert copilot_oauth.load_credentials() is None
+        clear_credentials()
+        assert load_credentials() is None
 
     def test_load_requires_access_token(self, tmp_config_dir: Path) -> None:
         """Credentials without an access token should be treated as invalid."""
         auth.save_provider("github-copilot", {
             "type": "oauth",
         })
-        assert copilot_oauth.load_credentials() is None
+        assert load_credentials() is None
 
 
 # ── 2. Usage fetch and parsing ─────────────────────────────
@@ -100,7 +105,7 @@ class TestCopilotFetch:
     """Test the fetch_copilot function."""
 
     def _setup_creds(self, tmp_config_dir: Path) -> None:
-        copilot_oauth.save_credentials({
+        save_credentials({
             "type": "oauth",
             "access": "gho_test_token",
         })

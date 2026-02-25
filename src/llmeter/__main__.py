@@ -69,39 +69,43 @@ def main() -> None:
             print(f"No {label} credentials stored.")
 
     def _login_claude() -> None:
-        from .providers.subscription.claude_oauth import interactive_login
+        from .providers.subscription.claude_login import interactive_login
         _enable_and_login("claude", interactive_login)
 
     def _login_codex() -> None:
-        from .providers.subscription.codex_oauth import interactive_login
+        from .providers.subscription.codex_login import interactive_login
         _enable_and_login("codex", interactive_login)
 
     def _login_gemini() -> None:
-        from .providers.subscription.gemini_oauth import interactive_login
+        from .providers.subscription.gemini_login import interactive_login
         _enable_and_login("gemini", interactive_login)
 
     def _login_copilot() -> None:
-        from .providers.subscription.copilot_oauth import interactive_login
+        from .providers.subscription.copilot_login import interactive_login
         _enable_and_login("copilot", interactive_login)
 
+    def _login_cursor() -> None:
+        from .providers.subscription.cursor_login import interactive_login
+        _enable_and_login("cursor", interactive_login)
+
     def _logout_claude() -> None:
-        from .providers.subscription.claude_oauth import clear_credentials, load_credentials
+        from .providers.subscription.claude import clear_credentials, load_credentials
         _clear_credentials("Claude", load_credentials, clear_credentials)
 
     def _logout_codex() -> None:
-        from .providers.subscription.codex_oauth import clear_credentials, load_credentials
+        from .providers.subscription.codex import clear_credentials, load_credentials
         _clear_credentials("Codex", load_credentials, clear_credentials)
 
     def _logout_gemini() -> None:
-        from .providers.subscription.gemini_oauth import clear_credentials, load_credentials
+        from .providers.subscription.gemini import clear_credentials, load_credentials
         _clear_credentials("Gemini", load_credentials, clear_credentials)
 
     def _logout_copilot() -> None:
-        from .providers.subscription.copilot_oauth import clear_credentials, load_credentials
+        from .providers.subscription.copilot import clear_credentials, load_credentials
         _clear_credentials("Copilot", load_credentials, clear_credentials)
 
     def _logout_cursor() -> None:
-        from .providers.subscription.cursor_auth import clear_credentials, load_credentials
+        from .providers.subscription.cursor import clear_credentials, load_credentials
         _clear_credentials("Cursor", load_credentials, clear_credentials)
 
     login_handlers = {
@@ -109,7 +113,7 @@ def main() -> None:
         "codex": _login_codex,
         "gemini": _login_gemini,
         "copilot": _login_copilot,
-        "cursor": _interactive_cursor_login,
+        "cursor": _login_cursor,
     }
 
     logout_handlers = {
@@ -283,108 +287,6 @@ def _rich_bar(used_pct: float, width: int = 20) -> str:
     bar_empty = f"[dim]{'─' * empty}[/dim]" if empty else ""
     return f"[dim]\\[[/dim]{bar_filled}{bar_empty}[dim]][/dim]"
 
-
-def _interactive_cursor_login() -> None:
-    """Interactive Cursor cookie login flow."""
-    from .providers.subscription.cursor_auth import load_credentials, save_credentials
-
-    existing = load_credentials()
-    if existing:
-        email = existing.get("email", "unknown")
-        print(f"Cursor credentials already stored (email: {email}).")
-        try:
-            answer = input("Replace them? [y/N] ").strip().lower()
-        except (EOFError, KeyboardInterrupt):
-            print()
-            return
-        if answer not in ("y", "yes"):
-            return
-
-    print()
-    print("To get your Cursor session cookie:")
-    print()
-    print("  1. Open https://cursor.com/dashboard in your browser")
-    print("  2. Open DevTools (F12) → Network tab → refresh the page")
-    print("  3. Click any request to cursor.com")
-    print("  4. Find the Cookie header and copy its value")
-    print()
-    print("The cookie should contain 'WorkosCursorSessionToken' or")
-    print("'__Secure-next-auth.session-token'.")
-    print()
-
-    try:
-        cookie = input("Cookie: ").strip()
-    except (EOFError, KeyboardInterrupt):
-        print("\nCancelled.")
-        return
-
-    if not cookie:
-        print("No cookie provided.", file=sys.stderr)
-        sys.exit(1)
-
-    # Strip "Cookie: " prefix if user copied the whole header
-    if cookie.lower().startswith("cookie:"):
-        cookie = cookie[7:].strip()
-
-    # Basic validation
-    valid_names = {
-        "WorkosCursorSessionToken",
-        "__Secure-next-auth.session-token",
-        "next-auth.session-token",
-    }
-    if not any(name in cookie for name in valid_names):
-        print(
-            "⚠ Warning: Cookie does not contain a known Cursor session token.",
-            file=sys.stderr,
-        )
-        print(
-            "  Expected one of: " + ", ".join(sorted(valid_names)),
-            file=sys.stderr,
-        )
-        try:
-            answer = input("Save anyway? [y/N] ").strip().lower()
-        except (EOFError, KeyboardInterrupt):
-            print()
-            return
-        if answer not in ("y", "yes"):
-            return
-
-    save_credentials(cookie)
-
-    from .config import enable_provider
-    enable_provider("cursor")
-    print("✓ Cursor cookie saved and provider enabled.")
-
-    # Try to verify by fetching user info
-    import asyncio
-    try:
-        import aiohttp
-        async def _verify():
-            headers = {
-                "Cookie": cookie,
-                "Accept": "application/json",
-            }
-            async with aiohttp.ClientSession() as session:
-                async with session.get(
-                    "https://cursor.com/api/auth/me",
-                    headers=headers,
-                    timeout=aiohttp.ClientTimeout(total=10),
-                ) as resp:
-                    if resp.status == 200:
-                        data = await resp.json()
-                        email = data.get("email")
-                        if email:
-                            save_credentials(cookie, email=email)
-                            return email
-            return None
-
-        email = asyncio.run(_verify())
-        if email:
-            print(f"✓ Verified — logged in as {email}")
-        else:
-            print("⚠ Could not verify cookie (will try on next fetch).")
-    except Exception:
-        print("⚠ Could not verify cookie (will try on next fetch).")
 
 
 if __name__ == "__main__":

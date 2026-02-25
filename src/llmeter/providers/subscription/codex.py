@@ -6,9 +6,16 @@ automatically from then on.
 
 from __future__ import annotations
 
+import base64
+import json
+import time
 from datetime import datetime, timezone
 from typing import Optional
+from urllib.parse import urlencode
 
+import aiohttp
+
+from ... import auth
 from ...models import (
     CreditsInfo,
     PROVIDERS,
@@ -16,14 +23,162 @@ from ...models import (
     ProviderResult,
     RateWindow,
 )
-from . import codex_oauth
-from ..helpers import http_get
+from ..helpers import decode_jwt_payload, http_get, http_debug_log
 from .base import SubscriptionProvider
+
+# ── OAuth constants ────────────────────────────────────────
+
+CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann"
+TOKEN_URL = "https://auth.openai.com/oauth/token"
+REDIRECT_URI = "http://localhost:1455/auth/callback"
+SCOPES = "openid profile email offline_access"
+JWT_CLAIM_PATH = "https://api.openai.com/auth"
+PROVIDER_ID = "openai-codex"
+_EXPIRY_BUFFER_MS = 5 * 60 * 1000
+
+# ── Provider API constants ─────────────────────────────────
 
 # The correct endpoint, per CodexBar and codex-rs source:
 # https://chatgpt.com/backend-api/wham/usage
 USAGE_URL = "https://chatgpt.com/backend-api/wham/usage"
 
+
+# ── Credential management ──────────────────────────────────
+
+def _now_ms() -> int:
+    return int(time.time() * 1000)
+
+
+def extract_account_id(access_token: str) -> Optional[str]:
+    """Extract the chatgpt_account_id from an OpenAI access token JWT."""
+    payload = decode_jwt_payload(access_token)
+    if not payload:
+        return None
+    auth_claim = payload.get(JWT_CLAIM_PATH)
+    if isinstance(auth_claim, dict):
+        account_id = auth_claim.get("chatgpt_account_id")
+        if isinstance(account_id, str) and account_id:
+            return account_id
+    return None
+
+
+def extract_email(id_token: str) -> Optional[str]:
+    """Extract email from an OpenAI id_token JWT."""
+    payload = decode_jwt_payload(id_token)
+    if not payload:
+        return None
+    email = payload.get("email")
+    if isinstance(email, str) and email:
+        return email.strip()
+    profile = payload.get("https://api.openai.com/profile")
+    if isinstance(profile, dict):
+        email = profile.get("email")
+        if isinstance(email, str) and email:
+            return email.strip()
+    return None
+
+
+def load_credentials() -> Optional[dict]:
+    """Load Codex OAuth credentials from the unified auth store."""
+    creds = auth.load_provider(PROVIDER_ID)
+    if creds and creds.get("access") and creds.get("refresh") and creds.get("accountId"):
+        return creds
+    return None
+
+
+def save_credentials(creds: dict) -> None:
+    """Persist credentials to the unified auth store."""
+    auth.save_provider(PROVIDER_ID, creds)
+
+
+def clear_credentials() -> None:
+    """Remove stored credentials."""
+    auth.clear_provider(PROVIDER_ID)
+
+
+def is_token_expired(creds: dict) -> bool:
+    """Check if the access token has expired (with buffer)."""
+    return auth.is_expired(creds)
+
+
+async def refresh_access_token(creds: dict, timeout: float = 30.0) -> dict:
+    """Use the refresh token to obtain a new access token.
+
+    Updates and persists the credentials on success.
+    Raises RuntimeError on failure.
+    """
+    refresh_token = creds.get("refresh")
+    if not refresh_token:
+        raise RuntimeError("No refresh token available — run `llmeter --login codex`.")
+
+    payload = urlencode({
+        "grant_type": "refresh_token",
+        "refresh_token": refresh_token,
+        "client_id": CLIENT_ID,
+    })
+    headers = {"Content-Type": "application/x-www-form-urlencoded"}
+    http_debug_log(
+        "codex-oauth", "token_refresh_request",
+        method="POST", url=TOKEN_URL, headers=headers,
+        payload={"grant_type": "refresh_token", "client_id": CLIENT_ID,
+                 "refresh_token": refresh_token},
+    )
+
+    async with aiohttp.ClientSession() as session:
+        async with session.post(
+            TOKEN_URL, data=payload, headers=headers,
+            timeout=aiohttp.ClientTimeout(total=timeout),
+        ) as resp:
+            http_debug_log(
+                "codex-oauth", "token_refresh_response",
+                method="POST", url=TOKEN_URL, status=resp.status,
+            )
+            if resp.status != 200:
+                body = await resp.text()
+                raise RuntimeError(
+                    f"Token refresh failed (HTTP {resp.status}): {body[:200]}"
+                )
+            token_data = await resp.json()
+
+    access_token = token_data.get("access_token")
+    new_refresh = token_data.get("refresh_token", refresh_token)
+    expires_in = token_data.get("expires_in")
+
+    if not access_token or not isinstance(expires_in, (int, float)):
+        raise RuntimeError("Token refresh response missing required fields.")
+
+    account_id = extract_account_id(access_token) or creds.get("accountId")
+    id_token = token_data.get("id_token")
+    email = extract_email(id_token) if id_token else creds.get("email")
+
+    new_creds: dict = {
+        "type": "oauth",
+        "access": access_token,
+        "refresh": new_refresh,
+        "expires": _now_ms() + int(expires_in) * 1000 - _EXPIRY_BUFFER_MS,
+        "accountId": account_id,
+    }
+    if email:
+        new_creds["email"] = email
+
+    save_credentials(new_creds)
+    return new_creds
+
+
+async def get_valid_credentials(timeout: float = 30.0) -> Optional[dict]:
+    """Load credentials, refresh if expired, return full creds dict or None."""
+    creds = load_credentials()
+    if creds is None:
+        return None
+    if is_token_expired(creds):
+        try:
+            creds = await refresh_access_token(creds, timeout=timeout)
+        except RuntimeError:
+            return None
+    return creds
+
+
+# ── Provider class ─────────────────────────────────────────
 
 class CodexProvider(SubscriptionProvider):
     """Fetches Codex usage via direct OAuth API."""
@@ -40,7 +195,7 @@ class CodexProvider(SubscriptionProvider):
         )
 
     async def get_credentials(self, timeout: float) -> Optional[dict]:
-        return await codex_oauth.get_valid_credentials(timeout=timeout)
+        return await get_valid_credentials(timeout=timeout)
 
     async def _fetch(
         self,
@@ -50,12 +205,9 @@ class CodexProvider(SubscriptionProvider):
     ) -> ProviderResult:
         result = PROVIDERS["codex"].to_result()
 
-        access_token = creds["access"]
-        account_id = creds["accountId"]
-
         headers = {
-            "Authorization": f"Bearer {access_token}",
-            "ChatGPT-Account-Id": account_id,
+            "Authorization": f"Bearer {creds['access']}",
+            "ChatGPT-Account-Id": creds["accountId"],
             "User-Agent": "LLMeter/0.1.0",
             "Accept": "application/json",
         }
@@ -83,39 +235,13 @@ class CodexProvider(SubscriptionProvider):
 
 
 # ── Response parsing ───────────────────────────────────────
-#
-# The /wham/usage response format (from CodexBar docs):
-#
-# {
-#   "plan_type": "pro",
-#   "rate_limit": {
-#     "primary_window": {
-#       "used_percent": 15,
-#       "reset_at": 1735401600,        # epoch seconds
-#       "limit_window_seconds": 18000   # 5 hours
-#     },
-#     "secondary_window": {
-#       "used_percent": 5,
-#       "reset_at": 1735920000,
-#       "limit_window_seconds": 604800  # 7 days
-#     }
-#   },
-#   "credits": {
-#     "has_credits": true,
-#     "unlimited": false,
-#     "balance": 150.0
-#   }
-# }
-
 
 def _parse_usage_response(data: dict, result: ProviderResult, email: str | None = None) -> None:
-    """Parse the /wham/usage response into the ProviderResult."""
     rate_limit = data.get("rate_limit")
     if isinstance(rate_limit, dict):
         primary = rate_limit.get("primary_window")
         if primary:
             result.primary = _parse_window(primary)
-
         secondary = rate_limit.get("secondary_window")
         if secondary:
             result.secondary = _parse_window(secondary)
@@ -138,7 +264,6 @@ def _parse_usage_response(data: dict, result: ProviderResult, email: str | None 
 
 
 def _format_plan_type(plan_type: str) -> str:
-    """Format plan type for display (e.g. 'plus' → 'ChatGPT Plus')."""
     known = {
         "guest": "ChatGPT Guest",
         "free": "ChatGPT Free",
@@ -156,19 +281,13 @@ def _format_plan_type(plan_type: str) -> str:
 
 
 def _parse_window(window: dict) -> RateWindow:
-    """Parse a rate limit window snapshot."""
     used_pct = window.get("used_percent", 0)
-
-    # limit_window_seconds → minutes
     limit_secs = window.get("limit_window_seconds")
     window_mins = limit_secs // 60 if isinstance(limit_secs, (int, float)) else None
-
-    # reset_at is epoch seconds
     resets_at = None
     reset_epoch = window.get("reset_at")
     if isinstance(reset_epoch, (int, float)) and reset_epoch > 0:
         resets_at = datetime.fromtimestamp(reset_epoch, tz=timezone.utc)
-
     return RateWindow(
         used_percent=used_pct,
         window_minutes=window_mins,

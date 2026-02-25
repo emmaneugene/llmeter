@@ -1,4 +1,4 @@
-"""Base class for subscription-based providers (OAuth / cookie auth)."""
+"""Abstract base classes for subscription providers and their login flows."""
 
 from __future__ import annotations
 
@@ -69,3 +69,32 @@ class SubscriptionProvider(ABC):
         except Exception as e:
             result.error = str(e)
             return result
+
+
+class LoginProvider(ABC):
+    """Base class for interactive provider login / authentication flows.
+
+    Subclasses must implement:
+    - ``provider_id`` – ID matching a key in ``models.PROVIDERS``
+    - ``interactive_login()`` – prompt the user, persist credentials, return them
+
+    There is no shared ``__call__`` lifecycle here because each login flow is
+    structurally unique (PKCE + browser, device flow, cookie paste, …).  The
+    base class exists to enforce the interface and make the "what do I need to
+    implement for a new provider?" question answerable at a glance.
+    """
+
+    @property
+    @abstractmethod
+    def provider_id(self) -> str:
+        """Provider ID matching a key in ``models.PROVIDERS``."""
+        ...
+
+    @abstractmethod
+    def interactive_login(self) -> dict:
+        """Prompt the user, obtain and persist credentials, then return them.
+
+        Should print progress messages to stdout.
+        Should raise ``RuntimeError`` on unrecoverable failure or user cancellation.
+        """
+        ...

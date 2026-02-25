@@ -16,8 +16,16 @@ import pytest
 from aioresponses import aioresponses
 
 from llmeter import auth
-from llmeter.providers.subscription import codex_oauth
-from llmeter.providers.subscription.codex import fetch_codex, USAGE_URL
+from llmeter.providers.subscription.codex import (
+    save_credentials,
+    load_credentials,
+    clear_credentials,
+    TOKEN_URL,
+    extract_account_id,
+    refresh_access_token,
+    fetch_codex,
+    USAGE_URL,
+)
 
 
 # ── 1. Credential generation / persistence ─────────────────
@@ -34,15 +42,15 @@ class TestCodexCredentials:
             "expires": int(time.time() * 1000) + 3600_000,
             "accountId": "acct-123",
         }
-        codex_oauth.save_credentials(creds)
+        save_credentials(creds)
 
-        loaded = codex_oauth.load_credentials()
+        loaded = load_credentials()
         assert loaded is not None
         assert loaded["access"] == "codex-access"
         assert loaded["accountId"] == "acct-123"
 
     def test_load_returns_none_when_empty(self, tmp_config_dir: Path) -> None:
-        assert codex_oauth.load_credentials() is None
+        assert load_credentials() is None
 
     def test_load_requires_account_id(self, tmp_config_dir: Path) -> None:
         """Credentials without accountId should be treated as invalid."""
@@ -50,15 +58,15 @@ class TestCodexCredentials:
             "type": "oauth", "access": "tok", "refresh": "ref", "expires": 0,
             # missing accountId
         })
-        assert codex_oauth.load_credentials() is None
+        assert load_credentials() is None
 
     def test_clear_credentials(self, tmp_config_dir: Path) -> None:
-        codex_oauth.save_credentials({
+        save_credentials({
             "type": "oauth", "access": "x", "refresh": "y",
             "expires": 0, "accountId": "a",
         })
-        codex_oauth.clear_credentials()
-        assert codex_oauth.load_credentials() is None
+        clear_credentials()
+        assert load_credentials() is None
 
     def test_extract_account_id_from_jwt(self) -> None:
         """Test JWT parsing for account ID extraction."""
@@ -73,11 +81,11 @@ class TestCodexCredentials:
         payload = base64.urlsafe_b64encode(json.dumps(payload_data).encode()).rstrip(b"=").decode()
         fake_jwt = f"{header}.{payload}.fakesig"
 
-        account_id = codex_oauth.extract_account_id(fake_jwt)
+        account_id = extract_account_id(fake_jwt)
         assert account_id == "test-account-456"
 
     def test_extract_account_id_returns_none_for_bad_jwt(self) -> None:
-        assert codex_oauth.extract_account_id("not.a.valid-jwt") is None
+        assert extract_account_id("not.a.valid-jwt") is None
 
     async def test_refresh_success(self, tmp_config_dir: Path) -> None:
         import base64
@@ -96,16 +104,16 @@ class TestCodexCredentials:
             "expires": 0,
             "accountId": "acct-old",
         }
-        codex_oauth.save_credentials(old_creds)
+        save_credentials(old_creds)
 
         with aioresponses() as mocked:
-            mocked.post(codex_oauth.TOKEN_URL, payload={
+            mocked.post(TOKEN_URL, payload={
                 "access_token": new_jwt,
                 "refresh_token": "new-refresh",
                 "expires_in": 7200,
             })
 
-            new_creds = await codex_oauth.refresh_access_token(old_creds)
+            new_creds = await refresh_access_token(old_creds)
 
         assert new_creds["access"] == new_jwt
         assert new_creds["refresh"] == "new-refresh"
@@ -118,10 +126,10 @@ class TestCodexCredentials:
         }
 
         with aioresponses() as mocked:
-            mocked.post(codex_oauth.TOKEN_URL, status=400, body="Bad Request")
+            mocked.post(TOKEN_URL, status=400, body="Bad Request")
 
             with pytest.raises(RuntimeError, match="Token refresh failed"):
-                await codex_oauth.refresh_access_token(creds)
+                await refresh_access_token(creds)
 
 
 # ── 2. Usage endpoint calls ────────────────────────────────
@@ -159,7 +167,7 @@ class TestCodexUsageEndpoint:
 
     async def test_fetch_with_valid_credentials(self, tmp_config_dir: Path) -> None:
         future = int(time.time() * 1000) + 3600_000
-        codex_oauth.save_credentials({
+        save_credentials({
             "type": "oauth", "access": "test-tok", "refresh": "ref",
             "expires": future, "accountId": "acct-test",
         })
@@ -187,7 +195,7 @@ class TestCodexUsageParsing:
 
     async def test_parse_full_response(self, tmp_config_dir: Path) -> None:
         future = int(time.time() * 1000) + 3600_000
-        codex_oauth.save_credentials({
+        save_credentials({
             "type": "oauth", "access": "tok", "refresh": "ref",
             "expires": future, "accountId": "acct",
         })
@@ -219,7 +227,7 @@ class TestCodexUsageParsing:
 
     async def test_parse_pro_plan(self, tmp_config_dir: Path) -> None:
         future = int(time.time() * 1000) + 3600_000
-        codex_oauth.save_credentials({
+        save_credentials({
             "type": "oauth", "access": "tok", "refresh": "ref",
             "expires": future, "accountId": "acct",
         })
@@ -254,7 +262,7 @@ class TestCodexUsageParsing:
     async def test_parse_no_rate_limit(self, tmp_config_dir: Path) -> None:
         """Response with plan_type but no rate_limit."""
         future = int(time.time() * 1000) + 3600_000
-        codex_oauth.save_credentials({
+        save_credentials({
             "type": "oauth", "access": "tok", "refresh": "ref",
             "expires": future, "accountId": "acct",
         })
@@ -273,7 +281,7 @@ class TestCodexUsageParsing:
     async def test_parse_empty_response(self, tmp_config_dir: Path) -> None:
         """Empty object should result in no windows but no error either."""
         future = int(time.time() * 1000) + 3600_000
-        codex_oauth.save_credentials({
+        save_credentials({
             "type": "oauth", "access": "tok", "refresh": "ref",
             "expires": future, "accountId": "acct",
         })

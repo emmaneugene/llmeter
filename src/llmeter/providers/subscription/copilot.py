@@ -12,18 +12,58 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Optional
 
+from ... import auth
 from ...models import (
     PROVIDERS,
     ProviderIdentity,
     ProviderResult,
     RateWindow,
 )
-from . import copilot_oauth
 from ..helpers import http_get, parse_iso8601
 from .base import SubscriptionProvider
 
+# ── Auth constants ─────────────────────────────────────────
+
+PROVIDER_ID = "github-copilot"
+
+# ── Provider API constants ─────────────────────────────────
+
 COPILOT_USER_URL = "https://api.github.com/copilot_internal/user"
 
+
+# ── Credential management ──────────────────────────────────
+
+def load_credentials() -> Optional[dict]:
+    """Load Copilot OAuth credentials from the unified auth store."""
+    creds = auth.load_provider(PROVIDER_ID)
+    if creds and creds.get("access"):
+        return creds
+    return None
+
+
+def save_credentials(creds: dict) -> None:
+    """Persist credentials to the unified auth store."""
+    auth.save_provider(PROVIDER_ID, creds)
+
+
+def clear_credentials() -> None:
+    """Remove stored credentials."""
+    auth.clear_provider(PROVIDER_ID)
+
+
+async def get_valid_access_token(timeout: float = 30.0) -> Optional[str]:
+    """Load credentials and return the access token, or None.
+
+    GitHub OAuth tokens obtained via the device flow are long-lived
+    and don't have a refresh mechanism.
+    """
+    creds = load_credentials()
+    if creds is None:
+        return None
+    return creds.get("access")
+
+
+# ── Provider class ─────────────────────────────────────────
 
 class CopilotProvider(SubscriptionProvider):
     """Fetches GitHub Copilot usage via the internal Copilot API."""
@@ -40,7 +80,7 @@ class CopilotProvider(SubscriptionProvider):
         )
 
     async def get_credentials(self, timeout: float) -> Optional[str]:
-        return await copilot_oauth.get_valid_access_token(timeout=timeout)
+        return await get_valid_access_token(timeout=timeout)
 
     async def _fetch(
         self,
@@ -57,34 +97,24 @@ class CopilotProvider(SubscriptionProvider):
             result.error = f"Copilot API error: {e}"
             return result
 
-        # Parse quota snapshots — only premium_interactions matters.
-        # Chat and completions are unlimited and skipped.
         quota_snapshots = data.get("quota_snapshots") or {}
         premium = quota_snapshots.get("premium_interactions")
 
-        # Reset date (monthly)
         reset_date_str = data.get("quota_reset_date_utc") or data.get("quota_reset_date")
         reset_dt: Optional[datetime] = None
         if reset_date_str:
             reset_dt = parse_iso8601(reset_date_str)
 
-        # Primary: premium interactions (request count bar, like Cursor)
         if premium and not premium.get("unlimited", False):
             entitlement = int(premium.get("entitlement", 0))
             remaining = int(premium.get("remaining", 0))
             used = max(0, entitlement - remaining)
             used_pct = max(0.0, 100.0 - premium.get("percent_remaining", 100.0))
-
-            result.primary = RateWindow(
-                used_percent=used_pct,
-                resets_at=reset_dt,
-            )
+            result.primary = RateWindow(used_percent=used_pct, resets_at=reset_dt)
             result.primary_label = f"Plan {used} / {entitlement} reqs"
         else:
-            # No premium quota or unlimited — show 0% with no label override
             result.primary = RateWindow(used_percent=0.0, resets_at=reset_dt)
 
-        # Identity
         copilot_plan = data.get("copilot_plan", "")
         login = data.get("login")
         result.identity = ProviderIdentity(
@@ -98,7 +128,6 @@ class CopilotProvider(SubscriptionProvider):
 
 
 async def _fetch_copilot_user(access_token: str, timeout: float = 30.0) -> dict:
-    """Call the internal Copilot user/quota endpoint."""
     headers = {
         "Authorization": f"token {access_token}",
         "Accept": "application/json",

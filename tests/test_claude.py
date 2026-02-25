@@ -16,8 +16,16 @@ import pytest
 from aioresponses import aioresponses
 
 from llmeter import auth
-from llmeter.providers.subscription import claude_oauth
-from llmeter.providers.subscription.claude import fetch_claude
+from llmeter.providers.subscription.claude import (
+    save_credentials,
+    load_credentials,
+    clear_credentials,
+    is_token_expired,
+    TOKEN_URL,
+    refresh_access_token,
+    get_valid_access_token,
+    fetch_claude,
+)
 
 
 # ── 1. Credential generation / persistence ─────────────────
@@ -33,31 +41,31 @@ class TestClaudeCredentials:
             "access": "acc-tok",
             "expires": int(time.time() * 1000) + 3600_000,
         }
-        claude_oauth.save_credentials(creds)
+        save_credentials(creds)
 
-        loaded = claude_oauth.load_credentials()
+        loaded = load_credentials()
         assert loaded is not None
         assert loaded["access"] == "acc-tok"
         assert loaded["refresh"] == "ref-tok"
 
     def test_load_returns_none_when_empty(self, tmp_config_dir: Path) -> None:
-        assert claude_oauth.load_credentials() is None
+        assert load_credentials() is None
 
     def test_clear_credentials(self, tmp_config_dir: Path) -> None:
-        claude_oauth.save_credentials({
+        save_credentials({
             "type": "oauth", "access": "x", "refresh": "y", "expires": 0,
         })
-        claude_oauth.clear_credentials()
-        assert claude_oauth.load_credentials() is None
+        clear_credentials()
+        assert load_credentials() is None
 
     def test_expired_token_detected(self, tmp_config_dir: Path) -> None:
         creds = {"type": "oauth", "access": "x", "refresh": "y", "expires": 0}
-        assert claude_oauth.is_token_expired(creds) is True
+        assert is_token_expired(creds) is True
 
     def test_valid_token_not_expired(self, tmp_config_dir: Path) -> None:
         future = int(time.time() * 1000) + 3600_000
         creds = {"type": "oauth", "access": "x", "refresh": "y", "expires": future}
-        assert claude_oauth.is_token_expired(creds) is False
+        assert is_token_expired(creds) is False
 
     async def test_refresh_success(self, tmp_config_dir: Path) -> None:
         old_creds = {
@@ -66,36 +74,36 @@ class TestClaudeCredentials:
             "access": "old-access",
             "expires": 0,
         }
-        claude_oauth.save_credentials(old_creds)
+        save_credentials(old_creds)
 
         with aioresponses() as mocked:
-            mocked.post(claude_oauth.TOKEN_URL, payload={
+            mocked.post(TOKEN_URL, payload={
                 "access_token": "new-access",
                 "refresh_token": "new-refresh",
                 "expires_in": 7200,
             })
 
-            new_creds = await claude_oauth.refresh_access_token(old_creds)
+            new_creds = await refresh_access_token(old_creds)
 
         assert new_creds["access"] == "new-access"
         assert new_creds["refresh"] == "new-refresh"
         assert new_creds["expires"] > int(time.time() * 1000)
 
         # Should be persisted
-        loaded = claude_oauth.load_credentials()
+        loaded = load_credentials()
         assert loaded["access"] == "new-access"
 
     async def test_refresh_failure_raises(self, tmp_config_dir: Path) -> None:
         creds = {"type": "oauth", "refresh": "bad-token", "access": "old", "expires": 0}
 
         with aioresponses() as mocked:
-            mocked.post(claude_oauth.TOKEN_URL, status=401, body="Unauthorized")
+            mocked.post(TOKEN_URL, status=401, body="Unauthorized")
 
             with pytest.raises(RuntimeError, match="Token refresh failed"):
-                await claude_oauth.refresh_access_token(creds)
+                await refresh_access_token(creds)
 
     async def test_get_valid_access_token_returns_none_when_no_creds(self, tmp_config_dir: Path) -> None:
-        result = await claude_oauth.get_valid_access_token()
+        result = await get_valid_access_token()
         assert result is None
 
 
@@ -129,7 +137,7 @@ class TestClaudeUsageEndpoint:
 
     async def test_fetch_with_valid_credentials(self, tmp_config_dir: Path) -> None:
         future = int(time.time() * 1000) + 3600_000
-        claude_oauth.save_credentials({
+        save_credentials({
             "type": "oauth", "access": "test-token", "refresh": "ref", "expires": future,
         })
 
@@ -166,7 +174,7 @@ class TestClaudeUsageParsing:
 
     async def test_parse_all_windows(self, tmp_config_dir: Path) -> None:
         future = int(time.time() * 1000) + 3600_000
-        claude_oauth.save_credentials({
+        save_credentials({
             "type": "oauth", "access": "test-token", "refresh": "ref", "expires": future,
         })
 
@@ -214,7 +222,7 @@ class TestClaudeUsageParsing:
     async def test_parse_minimal_response(self, tmp_config_dir: Path) -> None:
         """Only five_hour present, everything else absent."""
         future = int(time.time() * 1000) + 3600_000
-        claude_oauth.save_credentials({
+        save_credentials({
             "type": "oauth", "access": "tok", "refresh": "ref", "expires": future,
         })
 

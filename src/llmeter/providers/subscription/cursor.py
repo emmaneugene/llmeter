@@ -16,6 +16,7 @@ from typing import Optional
 
 import aiohttp
 
+from ... import auth
 from ...models import (
     CostInfo,
     PROVIDERS,
@@ -23,15 +24,47 @@ from ...models import (
     ProviderResult,
     RateWindow,
 )
-from . import cursor_auth
 from ..helpers import http_get, parse_iso8601
 from .base import SubscriptionProvider
+
+# ── Auth constants ─────────────────────────────────────────
+
+PROVIDER_KEY = "cursor"
+
+# ── Provider API constants ─────────────────────────────────
 
 BASE_URL = "https://cursor.com"
 USAGE_SUMMARY_URL = f"{BASE_URL}/api/usage-summary"
 AUTH_ME_URL = f"{BASE_URL}/api/auth/me"
 USAGE_URL = f"{BASE_URL}/api/usage"
 
+
+# ── Credential management ──────────────────────────────────
+
+def load_credentials() -> Optional[dict]:
+    """Load stored Cursor cookie credentials, or None."""
+    creds = auth.load_provider(PROVIDER_KEY)
+    if creds is None:
+        return None
+    if not creds.get("cookie"):
+        return None
+    return creds
+
+
+def save_credentials(cookie: str, email: str | None = None) -> None:
+    """Save Cursor cookie credentials."""
+    creds: dict = {"type": "cookie", "cookie": cookie}
+    if email:
+        creds["email"] = email
+    auth.save_provider(PROVIDER_KEY, creds)
+
+
+def clear_credentials() -> None:
+    """Remove stored Cursor credentials."""
+    auth.clear_provider(PROVIDER_KEY)
+
+
+# ── Provider class ─────────────────────────────────────────
 
 class CursorProvider(SubscriptionProvider):
     """Fetches Cursor usage via cookie-authenticated APIs."""
@@ -48,8 +81,7 @@ class CursorProvider(SubscriptionProvider):
         )
 
     async def get_credentials(self, timeout: float) -> Optional[dict]:
-        # Cursor auth is synchronous (reads a local file).
-        return cursor_auth.load_credentials()
+        return load_credentials()
 
     async def _fetch(
         self,
@@ -67,19 +99,15 @@ class CursorProvider(SubscriptionProvider):
 
         try:
             async with aiohttp.ClientSession() as session:
-                # Fetch usage summary (dollar-based)
                 usage_data = await http_get(
                     "cursor", USAGE_SUMMARY_URL, headers, timeout,
                     label="usage_summary", session=session,
                     errors={
-                        # "session expired" is a sentinel the exception handler
-                        # checks to know when to clear stored credentials.
                         401: "Cursor session expired. Run `llmeter --login cursor` to re-authenticate.",
                         403: "Cursor session expired. Run `llmeter --login cursor` to re-authenticate.",
                     },
                 )
 
-                # Fetch user info (best-effort — needed for sub ID and email)
                 user_data = None
                 try:
                     user_data = await http_get(
@@ -89,7 +117,6 @@ class CursorProvider(SubscriptionProvider):
                 except Exception:
                     pass
 
-                # Fetch legacy request usage if we have a user ID
                 request_data = None
                 if user_data and user_data.get("sub"):
                     try:
@@ -104,8 +131,7 @@ class CursorProvider(SubscriptionProvider):
         except RuntimeError as e:
             msg = str(e)
             if "session expired" in msg:
-                # Cookie expired — clear it so user gets a clean prompt
-                cursor_auth.clear_credentials()
+                clear_credentials()
             result.error = msg
             return result
         except Exception as e:
@@ -114,9 +140,8 @@ class CursorProvider(SubscriptionProvider):
 
         _parse_usage_response(usage_data, user_data, request_data, result)
 
-        # Persist email if we learned it
         if user_data and user_data.get("email") and not creds.get("email"):
-            cursor_auth.save_credentials(cookie, email=user_data["email"])
+            save_credentials(cookie, email=user_data["email"])
 
         result.source = "cookie"
         result.updated_at = datetime.now(timezone.utc)
@@ -124,30 +149,6 @@ class CursorProvider(SubscriptionProvider):
 
 
 # ── Response parsing ───────────────────────────────────────
-#
-# /api/usage-summary (dollar-based, values in cents):
-# {
-#   "billingCycleEnd": "2025-02-01T00:00:00.000Z",
-#   "membershipType": "pro",
-#   "individualUsage": {
-#     "plan": { "used": 1500, "limit": 5000, "totalPercentUsed": 30.0 },
-#     "onDemand": { "used": 500, "limit": 10000 }
-#   }
-# }
-#
-# /api/usage?user=ID (request-based, for legacy/enterprise plans):
-# {
-#   "gpt-4": {
-#     "numRequests": 138,
-#     "numRequestsTotal": 138,
-#     "maxRequestUsage": 500
-#   }
-# }
-#
-# When maxRequestUsage is present, the plan is request-based and the
-# primary bar should show requests used/limit, NOT dollar amounts.
-# This matches how Cursor's own dashboard displays usage.
-
 
 def _parse_usage_response(
     data: dict,
@@ -155,35 +156,20 @@ def _parse_usage_response(
     request_data: dict | None,
     result: ProviderResult,
 ) -> None:
-    """Parse usage responses into ProviderResult."""
-
-    # ── Billing cycle reset ─────────────────────────
     billing_end = parse_iso8601(data.get("billingCycleEnd"))
-
-    # ── Check for legacy request-based plan ─────────
     requests_used, requests_limit = _parse_request_usage(request_data)
     is_request_plan = requests_limit is not None
 
-    # ── Primary bar ─────────────────────────────────
     if is_request_plan:
-        # Request-based plan: show requests used / limit
         plan_pct = (requests_used / requests_limit) * 100 if requests_limit > 0 else 0
         result.primary_label = f"Plan {requests_used} / {requests_limit} reqs"
-        result.primary = RateWindow(
-            used_percent=plan_pct,
-            resets_at=billing_end,
-        )
+        result.primary = RateWindow(used_percent=plan_pct, resets_at=billing_end)
     else:
-        # Dollar-based plan: show dollar usage percentage
         individual = data.get("individualUsage") or {}
         plan = individual.get("plan") or {}
         plan_pct = _calc_plan_percent(plan)
-        result.primary = RateWindow(
-            used_percent=plan_pct,
-            resets_at=billing_end,
-        )
+        result.primary = RateWindow(used_percent=plan_pct, resets_at=billing_end)
 
-    # ── On-demand usage (secondary bar) ─────────────
     individual = data.get("individualUsage") or {}
     on_demand = individual.get("onDemand") or {}
     od_used_cents = on_demand.get("used", 0) or 0
@@ -191,12 +177,8 @@ def _parse_usage_response(
 
     if od_limit_cents and od_limit_cents > 0:
         od_pct = (od_used_cents / od_limit_cents) * 100
-        result.secondary = RateWindow(
-            used_percent=od_pct,
-            resets_at=billing_end,
-        )
+        result.secondary = RateWindow(used_percent=od_pct, resets_at=billing_end)
 
-    # ── Cost info (on-demand spend in USD) ──────────
     if od_used_cents > 0:
         result.cost = CostInfo(
             used=od_used_cents / 100.0,
@@ -205,7 +187,6 @@ def _parse_usage_response(
             period="Monthly",
         )
 
-    # ── Identity ────────────────────────────────────
     membership = data.get("membershipType")
     email = (user_data or {}).get("email")
     if membership or email:
@@ -216,43 +197,28 @@ def _parse_usage_response(
 
 
 def _parse_request_usage(request_data: dict | None) -> tuple[int, int | None]:
-    """Extract request counts from /api/usage response.
-
-    Returns (requests_used, requests_limit).
-    requests_limit is None if this is not a request-based plan.
-    """
     if not request_data:
         return (0, None)
-
     gpt4 = request_data.get("gpt-4") or {}
     limit = gpt4.get("maxRequestUsage")
     if limit is None:
         return (0, None)
-
-    # Prefer numRequestsTotal (includes all request types),
-    # fall back to numRequests
     used = gpt4.get("numRequestsTotal") or gpt4.get("numRequests") or 0
     return (used, limit)
 
 
 def _calc_plan_percent(plan: dict) -> float:
-    """Calculate plan usage percentage from dollar-based fields."""
     plan_used_cents = plan.get("used", 0) or 0
     plan_limit_cents = plan.get("limit", 0) or 0
-
     if plan_limit_cents > 0:
         return (plan_used_cents / plan_limit_cents) * 100
-
     if plan.get("totalPercentUsed") is not None:
         raw = plan["totalPercentUsed"]
-        # API may return 0-1 or 0-100
         return raw * 100 if raw <= 1 else raw
-
     return 0.0
 
 
 def _format_membership(membership: str) -> str:
-    """Format membership type for display."""
     known = {
         "pro": "Cursor Pro",
         "hobby": "Cursor Hobby",

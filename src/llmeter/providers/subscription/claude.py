@@ -6,9 +6,14 @@ automatically from then on.
 
 from __future__ import annotations
 
+import base64
+import time
 from datetime import datetime, timezone
 from typing import Optional
 
+import aiohttp
+
+from ... import auth
 from ...models import (
     CostInfo,
     PROVIDERS,
@@ -16,9 +21,20 @@ from ...models import (
     ProviderResult,
     RateWindow,
 )
-from . import claude_oauth
-from ..helpers import parse_iso8601, http_get
+from ..helpers import parse_iso8601, http_get, http_debug_log
 from .base import SubscriptionProvider
+
+# ── OAuth constants ────────────────────────────────────────
+
+_CLIENT_ID_B64 = "OWQxYzI1MGEtZTYxYi00NGQ5LTg4ZWQtNTk0NGQxOTYyZjVl"
+CLIENT_ID = base64.b64decode(_CLIENT_ID_B64).decode()
+TOKEN_URL = "https://console.anthropic.com/v1/oauth/token"
+REDIRECT_URI = "https://console.anthropic.com/oauth/code/callback"
+SCOPES = "org:create_api_key user:profile user:inference"
+PROVIDER_ID = "anthropic"
+_EXPIRY_BUFFER_MS = 5 * 60 * 1000
+
+# ── Provider API constants ─────────────────────────────────
 
 OAUTH_USAGE_URL = "https://api.anthropic.com/api/oauth/usage"
 OAUTH_PROFILE_URL = "https://api.anthropic.com/api/oauth/profile"
@@ -32,6 +48,97 @@ _CLAUDE_HEADERS = lambda token: {  # noqa: E731
     "User-Agent": "LLMeter/0.1.0",
 }
 
+
+# ── Credential management ──────────────────────────────────
+
+def _now_ms() -> int:
+    return int(time.time() * 1000)
+
+
+def load_credentials() -> Optional[dict]:
+    """Load Claude OAuth credentials from the unified auth store."""
+    creds = auth.load_provider(PROVIDER_ID)
+    if creds and creds.get("access") and creds.get("refresh"):
+        return creds
+    return None
+
+
+def save_credentials(creds: dict) -> None:
+    """Persist credentials to the unified auth store."""
+    auth.save_provider(PROVIDER_ID, creds)
+
+
+def clear_credentials() -> None:
+    """Remove stored credentials."""
+    auth.clear_provider(PROVIDER_ID)
+
+
+def is_token_expired(creds: dict) -> bool:
+    """Check if the access token has expired (with buffer)."""
+    return auth.is_expired(creds)
+
+
+async def refresh_access_token(creds: dict, timeout: float = 30.0) -> dict:
+    """Use the refresh token to obtain a new access token.
+
+    Updates and persists the credentials on success.
+    Raises RuntimeError on failure.
+    """
+    refresh_token = creds.get("refresh")
+    if not refresh_token:
+        raise RuntimeError("No refresh token available — run `llmeter --login claude`.")
+
+    payload = {
+        "grant_type": "refresh_token",
+        "client_id": CLIENT_ID,
+        "refresh_token": refresh_token,
+    }
+    headers = {"Content-Type": "application/json"}
+    http_debug_log(
+        "claude-oauth", "token_refresh_request",
+        method="POST", url=TOKEN_URL, headers=headers, payload=payload,
+    )
+
+    async with aiohttp.ClientSession() as session:
+        async with session.post(
+            TOKEN_URL, json=payload, headers=headers,
+            timeout=aiohttp.ClientTimeout(total=timeout),
+        ) as resp:
+            http_debug_log(
+                "claude-oauth", "token_refresh_response",
+                method="POST", url=TOKEN_URL, status=resp.status,
+            )
+            if resp.status != 200:
+                body = await resp.text()
+                raise RuntimeError(
+                    f"Token refresh failed (HTTP {resp.status}): {body[:200]}"
+                )
+            token_data = await resp.json()
+
+    new_creds = {
+        "type": "oauth",
+        "refresh": token_data.get("refresh_token", refresh_token),
+        "access": token_data["access_token"],
+        "expires": _now_ms() + token_data["expires_in"] * 1000 - _EXPIRY_BUFFER_MS,
+    }
+    save_credentials(new_creds)
+    return new_creds
+
+
+async def get_valid_access_token(timeout: float = 30.0) -> Optional[str]:
+    """Load credentials, refresh if expired, return access token or None."""
+    creds = load_credentials()
+    if creds is None:
+        return None
+    if is_token_expired(creds):
+        try:
+            creds = await refresh_access_token(creds, timeout=timeout)
+        except RuntimeError:
+            return None
+    return creds.get("access")
+
+
+# ── Provider class ─────────────────────────────────────────
 
 class ClaudeProvider(SubscriptionProvider):
     """Fetches Claude usage via the OAuth usage API."""
@@ -48,7 +155,7 @@ class ClaudeProvider(SubscriptionProvider):
         )
 
     async def get_credentials(self, timeout: float) -> Optional[str]:
-        return await claude_oauth.get_valid_access_token(timeout=timeout)
+        return await get_valid_access_token(timeout=timeout)
 
     async def _fetch(
         self,
@@ -59,7 +166,6 @@ class ClaudeProvider(SubscriptionProvider):
         access_token = creds
         result = PROVIDERS["claude"].to_result()
 
-        # --- Fetch usage ---
         try:
             usage = await http_get(
                 "claude", OAUTH_USAGE_URL, _CLAUDE_HEADERS(access_token), timeout,
@@ -79,7 +185,6 @@ class ClaudeProvider(SubscriptionProvider):
             result.error = f"Claude API error: {e}"
             return result
 
-        # --- Parse windows ---
         five_hour = usage.get("five_hour")
         if five_hour and five_hour.get("utilization") is not None:
             result.primary = RateWindow(
@@ -110,7 +215,6 @@ class ClaudeProvider(SubscriptionProvider):
                 result.tertiary_label = "Sonnet" if "sonnet" in key else "Opus"
                 break
 
-        # Extra usage (cost info)
         extra = usage.get("extra_usage")
         if extra and extra.get("is_enabled"):
             used = extra.get("used_credits")
@@ -122,7 +226,6 @@ class ClaudeProvider(SubscriptionProvider):
                     currency=extra.get("currency", "USD") or "USD",
                 )
 
-        # Identity
         profile = await _fetch_account_info(access_token, timeout=timeout)
         if profile:
             result.identity = ProviderIdentity(
@@ -135,7 +238,7 @@ class ClaudeProvider(SubscriptionProvider):
         return result
 
 
-# ── API calls ──────────────────────────────────────────────
+# ── Internal API helpers ───────────────────────────────────
 
 async def _fetch_account_info(
     access_token: str,
@@ -151,7 +254,6 @@ async def _fetch_account_info(
         return None
 
     result: dict = {}
-
     account = data.get("account")
     if isinstance(account, dict):
         email = (account.get("email") or "").strip()

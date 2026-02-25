@@ -16,8 +16,18 @@ import pytest
 from aioresponses import aioresponses
 
 from llmeter import auth
-from llmeter.providers.subscription import gemini_oauth
-from llmeter.providers.subscription.gemini import fetch_gemini, _fetch_quota, _load_code_assist, _tier_to_plan
+from llmeter.providers.subscription.gemini import (
+    save_credentials,
+    load_credentials,
+    clear_credentials,
+    TOKEN_URL,
+    refresh_access_token,
+    get_valid_credentials,
+    fetch_gemini,
+    _fetch_quota,
+    _load_code_assist,
+    _tier_to_plan,
+)
 
 
 QUOTA_URL = "https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuota"
@@ -39,28 +49,28 @@ class TestGeminiCredentials:
             "projectId": "gen-lang-client-1234",
             "email": "user@gmail.com",
         }
-        gemini_oauth.save_credentials(creds)
+        save_credentials(creds)
 
-        loaded = gemini_oauth.load_credentials()
+        loaded = load_credentials()
         assert loaded is not None
         assert loaded["access"] == "gem-access"
         assert loaded["projectId"] == "gen-lang-client-1234"
         assert loaded["email"] == "user@gmail.com"
 
     def test_load_returns_none_when_empty(self, tmp_config_dir: Path) -> None:
-        assert gemini_oauth.load_credentials() is None
+        assert load_credentials() is None
 
     def test_clear_credentials(self, tmp_config_dir: Path) -> None:
-        gemini_oauth.save_credentials({
+        save_credentials({
             "type": "oauth", "access": "x", "refresh": "y",
             "expires": 0, "projectId": "p", "email": "e",
         })
-        gemini_oauth.clear_credentials()
-        assert gemini_oauth.load_credentials() is None
+        clear_credentials()
+        assert load_credentials() is None
 
     def test_stored_under_correct_provider_key(self, tmp_config_dir: Path) -> None:
         """Verify credentials are stored under 'google-gemini-cli' in auth.json."""
-        gemini_oauth.save_credentials({
+        save_credentials({
             "type": "oauth", "access": "tok", "refresh": "ref",
             "expires": 0, "projectId": "p", "email": "e",
         })
@@ -71,13 +81,13 @@ class TestGeminiCredentials:
     def test_coexists_with_other_providers(self, tmp_config_dir: Path) -> None:
         """Multiple providers in auth.json don't interfere."""
         auth.save_provider("anthropic", {"type": "oauth", "access": "a1", "refresh": "r1", "expires": 0})
-        gemini_oauth.save_credentials({
+        save_credentials({
             "type": "oauth", "access": "g1", "refresh": "gr1",
             "expires": 0, "projectId": "p", "email": "e",
         })
 
         assert auth.load_provider("anthropic")["access"] == "a1"
-        assert gemini_oauth.load_credentials()["access"] == "g1"
+        assert load_credentials()["access"] == "g1"
 
     async def test_refresh_success(self, tmp_config_dir: Path) -> None:
         old_creds = {
@@ -88,16 +98,16 @@ class TestGeminiCredentials:
             "projectId": "my-project",
             "email": "user@test.com",
         }
-        gemini_oauth.save_credentials(old_creds)
+        save_credentials(old_creds)
 
         with aioresponses() as mocked:
-            mocked.post(gemini_oauth.TOKEN_URL, payload={
+            mocked.post(TOKEN_URL, payload={
                 "access_token": "new-access",
                 "refresh_token": "new-refresh",
                 "expires_in": 3600,
             })
 
-            new_creds = await gemini_oauth.refresh_access_token(old_creds)
+            new_creds = await refresh_access_token(old_creds)
 
         assert new_creds["access"] == "new-access"
         assert new_creds["refresh"] == "new-refresh"
@@ -105,7 +115,7 @@ class TestGeminiCredentials:
         assert new_creds["expires"] > int(time.time() * 1000)
 
         # Should be persisted
-        loaded = gemini_oauth.load_credentials()
+        loaded = load_credentials()
         assert loaded["access"] == "new-access"
 
     async def test_refresh_failure_raises(self, tmp_config_dir: Path) -> None:
@@ -115,28 +125,28 @@ class TestGeminiCredentials:
         }
 
         with aioresponses() as mocked:
-            mocked.post(gemini_oauth.TOKEN_URL, status=401, body="Invalid grant")
+            mocked.post(TOKEN_URL, status=401, body="Invalid grant")
 
             with pytest.raises(RuntimeError, match="Token refresh failed"):
-                await gemini_oauth.refresh_access_token(creds)
+                await refresh_access_token(creds)
 
     async def test_get_valid_credentials_returns_none_when_empty(self, tmp_config_dir: Path) -> None:
-        result = await gemini_oauth.get_valid_credentials()
+        result = await get_valid_credentials()
         assert result is None
 
     async def test_get_valid_credentials_refreshes_expired(self, tmp_config_dir: Path) -> None:
-        gemini_oauth.save_credentials({
+        save_credentials({
             "type": "oauth", "refresh": "ref", "access": "expired-tok",
             "expires": 0, "projectId": "p", "email": "e",
         })
 
         with aioresponses() as mocked:
-            mocked.post(gemini_oauth.TOKEN_URL, payload={
+            mocked.post(TOKEN_URL, payload={
                 "access_token": "refreshed-tok",
                 "expires_in": 3600,
             })
 
-            creds = await gemini_oauth.get_valid_credentials()
+            creds = await get_valid_credentials()
 
         assert creds is not None
         assert creds["access"] == "refreshed-tok"
@@ -185,7 +195,7 @@ class TestGeminiUsageEndpoint:
 
     async def test_fetch_with_valid_credentials(self, tmp_config_dir: Path) -> None:
         future = int(time.time() * 1000) + 3600_000
-        gemini_oauth.save_credentials({
+        save_credentials({
             "type": "oauth", "access": "test-token", "refresh": "ref",
             "expires": future, "projectId": "my-project", "email": "user@test.com",
         })
@@ -207,7 +217,7 @@ class TestGeminiUsageEndpoint:
 
     async def test_fetch_handles_401(self, tmp_config_dir: Path) -> None:
         future = int(time.time() * 1000) + 3600_000
-        gemini_oauth.save_credentials({
+        save_credentials({
             "type": "oauth", "access": "bad-token", "refresh": "ref",
             "expires": future, "projectId": "p", "email": "e",
         })
@@ -255,7 +265,7 @@ class TestGeminiQuotaParsing:
 
     async def test_parse_pro_and_flash(self, tmp_config_dir: Path) -> None:
         future = int(time.time() * 1000) + 3600_000
-        gemini_oauth.save_credentials({
+        save_credentials({
             "type": "oauth", "access": "tok", "refresh": "ref",
             "expires": future, "projectId": "p", "email": "user@test.com",
         })
@@ -277,7 +287,7 @@ class TestGeminiQuotaParsing:
 
     async def test_parse_identity(self, tmp_config_dir: Path) -> None:
         future = int(time.time() * 1000) + 3600_000
-        gemini_oauth.save_credentials({
+        save_credentials({
             "type": "oauth", "access": "tok", "refresh": "ref",
             "expires": future, "projectId": "p", "email": "user@test.com",
         })
@@ -301,7 +311,7 @@ class TestGeminiQuotaParsing:
     async def test_parse_only_flash(self, tmp_config_dir: Path) -> None:
         """When only Flash models are in quotas, primary should be None."""
         future = int(time.time() * 1000) + 3600_000
-        gemini_oauth.save_credentials({
+        save_credentials({
             "type": "oauth", "access": "tok", "refresh": "ref",
             "expires": future, "projectId": "p", "email": "e",
         })
@@ -325,7 +335,7 @@ class TestGeminiQuotaParsing:
     async def test_parse_no_buckets_errors(self, tmp_config_dir: Path) -> None:
         """Empty buckets should produce an error."""
         future = int(time.time() * 1000) + 3600_000
-        gemini_oauth.save_credentials({
+        save_credentials({
             "type": "oauth", "access": "tok", "refresh": "ref",
             "expires": future, "projectId": "p", "email": "e",
         })
