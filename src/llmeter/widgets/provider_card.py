@@ -106,36 +106,13 @@ class ProviderCard(Widget):
 
         rows: list[Widget] = []
 
-        # Primary window
-        if d.primary:
+        for label, window in d.windows():
             rows.append(Static(
-                Text(f"  {d.primary_label}:", style="bold"),
+                Text(f"  {label}:", style="bold"),
                 classes="bar-label",
             ))
-            rows.append(UsageBar(used_percent=d.primary.used_percent))
-            reset = d.primary.reset_text()
-            if reset:
-                rows.append(Static(f"    {reset}", classes="reset-info"))
-
-        # Secondary window
-        if d.secondary:
-            rows.append(Static(
-                Text(f"  {d.secondary_label}:", style="bold"),
-                classes="bar-label",
-            ))
-            rows.append(UsageBar(used_percent=d.secondary.used_percent))
-            reset = d.secondary.reset_text()
-            if reset:
-                rows.append(Static(f"    {reset}", classes="reset-info"))
-
-        # Tertiary window
-        if d.tertiary:
-            rows.append(Static(
-                Text(f"  {d.tertiary_label}:", style="bold"),
-                classes="bar-label",
-            ))
-            rows.append(UsageBar(used_percent=d.tertiary.used_percent))
-            reset = d.tertiary.reset_text()
+            rows.append(UsageBar(used_percent=window.used_percent))
+            reset = window.reset_text()
             if reset:
                 rows.append(Static(f"    {reset}", classes="reset-info"))
 

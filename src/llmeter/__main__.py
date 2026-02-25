@@ -241,30 +241,12 @@ def _run_snapshot(config, json_output: bool = False) -> None:
 
         lines: list[str] = []
 
-        if p.primary:
-            pct = p.primary.used_percent
+        for label, window in p.windows():
+            pct = window.used_percent
             bar = _rich_bar(pct, width=bar_width)
-            lines.append(f"  [bold]{p.primary_label}:[/bold]")
+            lines.append(f"  [bold]{label}:[/bold]")
             lines.append(f"  {bar} {pct:3.0f}% used")
-            reset = p.primary.reset_text()
-            if reset:
-                lines.append(f"    [dim]{reset}[/dim]")
-
-        if p.secondary:
-            pct = p.secondary.used_percent
-            bar = _rich_bar(pct, width=bar_width)
-            lines.append(f"  [bold]{p.secondary_label}:[/bold]")
-            lines.append(f"  {bar} {pct:3.0f}% used")
-            reset = p.secondary.reset_text()
-            if reset:
-                lines.append(f"    [dim]{reset}[/dim]")
-
-        if p.tertiary:
-            pct = p.tertiary.used_percent
-            bar = _rich_bar(pct, width=bar_width)
-            lines.append(f"  [bold]{p.tertiary_label}:[/bold]")
-            lines.append(f"  {bar} {pct:3.0f}% used")
-            reset = p.tertiary.reset_text()
+            reset = window.reset_text()
             if reset:
                 lines.append(f"    [dim]{reset}[/dim]")
 
@@ -313,20 +295,12 @@ def _to_jsonable(value):
 
 def _rich_bar(used_pct: float, width: int = 20) -> str:
     """Create a small text-based bar for Rich markup (fills up as usage grows)."""
+    from .widgets.usage_bar import _bar_color
+
     filled = round((used_pct / 100.0) * width)
     filled = max(0, min(width, filled))
     empty = width - filled
-
-    if used_pct >= 90:
-        color = "bold red"
-    elif used_pct >= 75:
-        color = "red"
-    elif used_pct >= 50:
-        color = "yellow"
-    elif used_pct >= 25:
-        color = "bright_green"
-    else:
-        color = "green"
+    color = _bar_color(used_pct)
 
     bar_filled = f"[{color}]{'━' * filled}[/{color}]" if filled else ""
     bar_empty = f"[dim]{'─' * empty}[/dim]" if empty else ""

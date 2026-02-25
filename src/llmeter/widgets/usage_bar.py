@@ -6,6 +6,19 @@ from rich.text import Text
 from textual.widget import Widget
 
 
+def _bar_color(pct: float) -> str:
+    """Return the Rich/Textual color style for a given usage percentage."""
+    if pct >= 90:
+        return "bold red"
+    if pct >= 75:
+        return "red"
+    if pct >= 50:
+        return "yellow"
+    if pct >= 25:
+        return "bright_green"
+    return "green"
+
+
 class UsageBar(Widget):
     """A horizontal bar showing how much has been used (fills up as usage grows)."""
 
@@ -44,22 +57,7 @@ class UsageBar(Widget):
         filled = max(0, min(bar_width, filled))
         empty = bar_width - filled
 
-        # Low usage = green, high usage = red
-        if pct >= 90:
-            bar_style = "bold red"
-            pct_style = "bold red"
-        elif pct >= 75:
-            bar_style = "red"
-            pct_style = "red"
-        elif pct >= 50:
-            bar_style = "yellow"
-            pct_style = "yellow"
-        elif pct >= 25:
-            bar_style = "bright_green"
-            pct_style = "bright_green"
-        else:
-            bar_style = "green"
-            pct_style = "green"
+        bar_style = pct_style = _bar_color(pct)
 
         t = Text()
         if self._label:
