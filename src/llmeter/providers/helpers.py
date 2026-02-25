@@ -169,7 +169,13 @@ async def http_get(
             if resp.status != 200:
                 body = await resp.text()
                 raise RuntimeError(f"HTTP {resp.status}: {body[:_BODY_PREVIEW]}")
-            return await resp.json()
+            try:
+                return await resp.json(content_type=None)
+            except (json.JSONDecodeError, ValueError) as exc:
+                ct = resp.headers.get("Content-Type", "unknown")
+                raise RuntimeError(
+                    f"Expected JSON but got {ct!r} (HTTP {resp.status})"
+                ) from exc
     finally:
         if close_session:
             await session.close()
@@ -217,7 +223,13 @@ async def http_post(
             if resp.status != 200:
                 body = await resp.text()
                 raise RuntimeError(f"HTTP {resp.status}: {body[:_BODY_PREVIEW]}")
-            return await resp.json()
+            try:
+                return await resp.json(content_type=None)
+            except (json.JSONDecodeError, ValueError) as exc:
+                ct = resp.headers.get("Content-Type", "unknown")
+                raise RuntimeError(
+                    f"Expected JSON but got {ct!r} (HTTP {resp.status})"
+                ) from exc
     finally:
         if close_session:
             await session.close()
