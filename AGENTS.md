@@ -21,33 +21,17 @@ src/llmeter/
 ├── config.py            # JSON config (~/.config/llmeter/settings.json)
 ├── auth.py              # Unified credential store (~/.config/llmeter/auth.json)
 ├── models.py            # Data models
-├── providers/           # One module per provider
-│   ├── helpers.py       # Shared utilities (config_dir, HTTP helpers)
-│   ├── codex.py         # Codex (ChatGPT) usage fetcher
-│   ├── codex_oauth.py   # Codex OAuth flow
-│   ├── claude.py        # Claude usage fetcher
-│   ├── claude_oauth.py  # Claude OAuth flow
-│   ├── cursor.py        # Cursor usage fetcher
-│   ├── cursor_auth.py   # Cursor auth
-│   ├── gemini.py        # Gemini CLI quota fetcher
-│   ├── gemini_oauth.py  # Gemini OAuth flow
-│   ├── copilot.py       # GitHub Copilot usage fetcher
-│   ├── copilot_oauth.py # Copilot Device Flow OAuth
-│   ├── openai_api.py    # OpenAI API billing
-│   └── anthropic_api.py # Anthropic API billing
+├── providers/
+│   ├── helpers.py       # Shared HTTP utilities (http_get, http_post, debug log)
+│   ├── subscription/    # OAuth / cookie-based providers
+│   │   ├── base.py      # SubscriptionProvider + LoginProvider ABCs
+│   │   └── ...
+│   └── api/             # API-key billing providers
+│       ├── base.py      # ApiProvider ABC
+│       └── ...
 └── widgets/
     ├── provider_card.py # Dashboard card widget
     └── usage_bar.py     # Color-coded usage bar widget
-
-tests/                   # pytest test suite
-├── conftest.py          # Shared fixtures (tmp config dirs, auth helpers)
-├── test_auth.py
-├── test_codex.py
-├── test_claude.py
-├── test_copilot.py
-├── test_cursor.py
-├── test_gemini.py
-└── test_config.py
 ```
 
 ## Key Conventions
@@ -57,14 +41,28 @@ tests/                   # pytest test suite
 - Use `from __future__ import annotations` in all modules.
 - Type hints everywhere; use `Optional` / `X | None` style from `typing`.
 - Dataclasses for data models (`models.py`).
-- All provider fetchers are async functions returning `ProviderResult`.
+- All provider fetchers are callable class instances returning `ProviderResult`.
 
 ### Provider Architecture
 
-- Each provider has a `fetch_<name>()` async function in `src/llmeter/providers/`.
-- OAuth providers have a separate `*_oauth.py` module for the login flow.
-- Fetchers are registered in `backend.py` via the `PROVIDER_FETCHERS` dict.
-- When adding a new provider: create the fetcher module, register it in `backend.py`, and add its ID to `models.py` `PROVIDERS`.
+Providers are split into two categories, each with its own base class:
+
+- **`SubscriptionProvider`** (`subscription/base.py`) — OAuth / cookie auth. Subclasses implement `get_credentials(timeout)` and `_fetch(creds, timeout, settings)`. The base `__call__` handles the shared lifecycle: credential guard, delegation, exception wrapping.
+- **`ApiProvider`** (`api/base.py`) — API-key billing. Subclasses implement `resolve_api_key(settings)` and `_fetch(api_key, timeout, settings)`.
+- **`LoginProvider`** (`subscription/base.py`) — interactive setup flow. Subclasses implement `interactive_login() -> dict`. No shared runtime behaviour; the base exists to enforce the interface.
+
+Each provider module (`<name>.py`) owns its full runtime path: OAuth constants, credential management (`load/save/clear`, token refresh, `get_valid_*`), the provider class, and a module-level callable singleton (`fetch_<name> = <Name>Provider()`).
+
+Each login module (`<name>_login.py`) owns only the one-time setup machinery (PKCE helpers, callback servers, browser flow, device flow polling) and exposes a module-level `interactive_login = <Name>Login().interactive_login`.
+
+Singletons are registered in `backend.py` via the `PROVIDER_FETCHERS` dict.
+
+**To add a new subscription provider:**
+1. Add a `ProviderMeta` entry to `models.py` `PROVIDERS`.
+2. Create `providers/subscription/<name>.py` — implement `SubscriptionProvider`, include credential management.
+3. Create `providers/subscription/<name>_login.py` — implement `LoginProvider` with the interactive flow.
+4. Register `fetch_<name>` in `backend.py` `PROVIDER_FETCHERS`.
+5. Add `_login_<name>` / `_logout_<name>` handlers in `__main__.py`.
 
 ### Configuration
 
