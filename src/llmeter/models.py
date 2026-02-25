@@ -131,10 +131,11 @@ class ProviderResult:
     error: Optional[str] = None
     updated_at: Optional[datetime] = None
 
-    # Labels for each window
-    primary_label: str = "Session"
-    secondary_label: str = "Weekly"
-    tertiary_label: str = "Sonnet"
+    # Labels for each window — always set via ProviderMeta.to_result();
+    # empty string signals a result constructed without going through metadata.
+    primary_label: str = ""
+    secondary_label: str = ""
+    tertiary_label: str = ""
 
     # Set when the provider's data has known reporting delays (e.g. API billing)
     has_reporting_delay: bool = False
