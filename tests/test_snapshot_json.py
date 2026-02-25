@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from llmeter.__main__ import _run_snapshot
+from llmeter.cli.snapshot import run_snapshot as _run_snapshot
 from llmeter.config import AppConfig, ProviderConfig
 from llmeter.models import PROVIDERS, ProviderIdentity, RateWindow
 
