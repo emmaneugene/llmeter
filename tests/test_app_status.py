@@ -56,3 +56,19 @@ def test_refresh_all_with_no_enabled_providers_shows_empty_status() -> None:
     assert app._refresh_in_progress is False
     assert app._pending_provider_ids == set()
     assert "No providers enabled" in app.sub_title
+
+
+def test_reload_config_replaces_runtime_config(monkeypatch) -> None:
+    app = _make_app()
+
+    def fake_load_config() -> AppConfig:
+        return AppConfig(
+            providers=[ProviderConfig(id="gemini", enabled=True)],
+            refresh_interval=120,
+        )
+
+    monkeypatch.setattr("llmeter.config.load_config", fake_load_config)
+
+    app._reload_config()
+
+    assert app._config.provider_ids == ["gemini"]

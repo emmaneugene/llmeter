@@ -113,6 +113,7 @@ class LLMeterApp(App):
         self._refresh_queued = False
         self._last_refresh: datetime | None = None
         self._theme_idx = 0
+        self._refresh_timer = None
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
@@ -152,20 +153,49 @@ class LLMeterApp(App):
         self.sub_title = f"v{__version__}  •  refresh every {self._refresh_interval_text()}"
 
         # Mount placeholder cards immediately
-        enabled = self._config.enabled_providers
-        if enabled:
-            container = self.query_one("#provider-list", Vertical)
-            for pcfg in enabled:
-                placeholder = placeholder_result(pcfg.id)
-                card = ProviderCard(placeholder, id=f"card-{pcfg.id}")
-                self._cards[pcfg.id] = card
-                container.mount(card)
+        await self._rebuild_provider_views()
 
         # Kick off all provider fetches (no-op when nothing enabled)
         self._refresh_all()
 
         # Set up auto-refresh timer
-        self.set_interval(interval, self._refresh_all)
+        self._refresh_timer = self.set_interval(interval, self._refresh_all)
+
+    async def _rebuild_provider_views(self) -> None:
+        """Rebuild provider cards/empty-state from current config."""
+        container = self.query_one("#main-body", ScrollableContainer)
+        await container.remove_children()
+
+        self._cards = {}
+        self._providers = {}
+
+        enabled = self._config.enabled_providers
+        if not enabled:
+            await container.mount(Static(NO_PROVIDERS_HELP, id="empty-state"))
+            return
+
+        provider_list = Vertical(id="provider-list")
+        await container.mount(provider_list)
+
+        for pcfg in enabled:
+            placeholder = placeholder_result(pcfg.id)
+            card = ProviderCard(placeholder, id=f"card-{pcfg.id}")
+            self._cards[pcfg.id] = card
+            await provider_list.mount(card)
+
+    def _reload_config(self) -> None:
+        """Reload settings.json and update the refresh timer if needed."""
+        from .config import load_config
+
+        prev_interval = self._config.refresh_interval
+        self._config = load_config()
+
+        if self._refresh_timer and self._config.refresh_interval != prev_interval:
+            self._refresh_timer.stop()
+            self._refresh_timer = self.set_interval(
+                self._config.refresh_interval,
+                self._refresh_all,
+            )
 
     def _refresh_all(self) -> None:
         """Launch a fetch worker for each provider."""
@@ -255,7 +285,9 @@ class LLMeterApp(App):
 
     # ── Actions ────────────────────────────────────────────
 
-    def action_refresh(self) -> None:
+    async def action_refresh(self) -> None:
+        self._reload_config()
+        await self._rebuild_provider_views()
         self._refresh_all()
 
     def action_cycle_theme(self) -> None:
