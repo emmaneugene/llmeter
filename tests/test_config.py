@@ -33,6 +33,10 @@ class TestProviderConfig:
         pc = ProviderConfig.from_dict({"id": "gemini", "enabled": False})
         assert pc.enabled is False
 
+    def test_from_dict_non_boolean_enabled_uses_default_true(self) -> None:
+        pc = ProviderConfig.from_dict({"id": "gemini", "enabled": "false"})
+        assert pc.enabled is True
+
     def test_from_dict_preserves_settings(self) -> None:
         pc = ProviderConfig.from_dict(
             {
@@ -161,6 +165,21 @@ class TestLoadConfig:
         cfg = load_config()
         assert cfg.provider_ids == ["gemini", "claude"]
         assert cfg.refresh_interval == 120
+
+    def test_load_falls_back_on_invalid_refresh_interval(self, tmp_config_dir: Path) -> None:
+        data = {
+            "providers": [
+                {"id": "codex", "enabled": True},
+            ],
+            "refresh_interval": "abc",
+        }
+        path = config_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(data))
+
+        cfg = load_config()
+        assert cfg.provider_ids == []
+        assert cfg.providers == []
 
     def test_load_auto_discovers_new_providers(self, tmp_config_dir: Path) -> None:
         """Providers added after config was created should appear as disabled."""

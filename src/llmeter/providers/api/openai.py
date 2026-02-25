@@ -57,7 +57,12 @@ class OpenAIApiProvider(ApiProvider):
         settings: dict,
     ) -> ProviderResult:
         result = PROVIDERS["openai-api"].to_result(source="api")
-        monthly_budget: float = settings.get("monthly_budget", 0.0)
+        try:
+            monthly_budget = float(settings.get("monthly_budget", 0.0) or 0.0)
+        except (TypeError, ValueError):
+            monthly_budget = 0.0
+        if monthly_budget < 0:
+            monthly_budget = 0.0
 
         # Current month boundaries (UTC)
         now = datetime.now(timezone.utc)

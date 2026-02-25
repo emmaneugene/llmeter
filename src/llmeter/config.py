@@ -37,9 +37,10 @@ class ProviderConfig:
 
     @classmethod
     def from_dict(cls, d: dict) -> "ProviderConfig":
-        enabled = d.get("enabled", True)
+        raw_enabled = d.get("enabled", True)
+        enabled = raw_enabled if isinstance(raw_enabled, bool) else True
         settings = {k: v for k, v in d.items() if k not in ("id", "enabled")}
-        return cls(id=d["id"], enabled=bool(enabled), settings=settings)
+        return cls(id=d["id"], enabled=enabled, settings=settings)
 
     def to_dict(self) -> dict:
         """Serialize back to a JSON-friendly dict."""
@@ -129,7 +130,7 @@ def load_config() -> AppConfig:
 
         cfg.providers = valid
         return cfg
-    except (json.JSONDecodeError, KeyError, TypeError) as e:
+    except (json.JSONDecodeError, KeyError, TypeError, ValueError) as e:
         import sys
         print(f"llmeter: bad config ({path}): {e} — using defaults", file=sys.stderr)
         return AppConfig.default()
