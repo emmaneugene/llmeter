@@ -3,6 +3,22 @@
 from __future__ import annotations
 
 from llmeter import backend
+from llmeter.models import PROVIDERS
+
+
+def test_provider_fetchers_matches_providers_registry() -> None:
+    """PROVIDER_FETCHERS and PROVIDERS must stay in sync.
+
+    config.py validates provider IDs against PROVIDERS (to avoid a circular
+    import with backend).  This test ensures that every entry in PROVIDERS
+    has a corresponding fetcher, so the two registries never drift apart.
+    """
+    assert backend.PROVIDER_FETCHERS.keys() == PROVIDERS.keys(), (
+        f"Mismatch — in PROVIDERS but not PROVIDER_FETCHERS: "
+        f"{PROVIDERS.keys() - backend.PROVIDER_FETCHERS.keys()}\n"
+        f"In PROVIDER_FETCHERS but not PROVIDERS: "
+        f"{backend.PROVIDER_FETCHERS.keys() - PROVIDERS.keys()}"
+    )
 
 
 async def test_fetch_all_respects_explicit_empty_provider_list() -> None:

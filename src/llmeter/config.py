@@ -25,6 +25,7 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from .models import PROVIDERS
 from .providers.helpers import config_dir
 
 
@@ -124,9 +125,8 @@ def load_config() -> AppConfig:
         cfg = AppConfig.from_dict(data)
 
         # Filter out unknown provider IDs
-        from .backend import PROVIDER_FETCHERS, ALL_PROVIDER_ORDER
-        valid = [p for p in cfg.providers if p.id in PROVIDER_FETCHERS]
-        unknown = [p.id for p in cfg.providers if p.id not in PROVIDER_FETCHERS]
+        valid = [p for p in cfg.providers if p.id in PROVIDERS]
+        unknown = [p.id for p in cfg.providers if p.id not in PROVIDERS]
         if unknown:
             import sys
             print(
@@ -136,8 +136,8 @@ def load_config() -> AppConfig:
 
         # Auto-discover new providers not yet in config (append as disabled)
         existing_ids = {p.id for p in valid}
-        for pid in ALL_PROVIDER_ORDER:
-            if pid not in existing_ids and pid in PROVIDER_FETCHERS:
+        for pid in PROVIDERS:
+            if pid not in existing_ids:
                 valid.append(ProviderConfig(id=pid, enabled=False))
 
         cfg.providers = valid
@@ -155,9 +155,7 @@ def init_config() -> None:
         print(f"Config already exists: {path}")
         return
 
-    from .backend import ALL_PROVIDER_ORDER
-
-    providers = [ProviderConfig(id=pid, enabled=False) for pid in ALL_PROVIDER_ORDER]
+    providers = [ProviderConfig(id=pid, enabled=False) for pid in PROVIDERS]
     cfg = AppConfig(providers=providers)
     data = {
         "providers": [p.to_dict() for p in cfg.providers],
