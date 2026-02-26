@@ -4,12 +4,20 @@ A CLI tool to monitor your LLM subscription and API limits.
 
 ![llmeter demo](docs/demo.png)
 
+## Overview
+
+AI-assisted coding is here to stay, and at some point you'll probably be trying to manage your usage on some paid subscriptions. `llmeter` helps you do that without leaving the comfort of the CLI.
+
 ## Features
 
-- **Multiple providers** — Codex, Claude, Cursor, GitHub Copilot, and more
-- **Self-contained auth** — Login once with OAuth or manually enter cookies/API keys. No external dependencies.
-- **Interactive or static** — Color-coded usage bars with reset countdowns, auto-refreshing
-- **Config-driven** — JSON config controls which providers are shown and in what order
+There are a bunch of tools out there that do similar things, but I found that they were either too complex and invasive, or lacking in features. Here's what `llmeter` does:
+
+- **Usage tracking for subscription and API providers**
+  - For subscriptions (e.g. Claude, Codex, Cursor), quota follows their respective usage reporting format
+  - For API providers (e.g. Anthropic, OpenAI, OpenCode Zen), the quota is spend for the current month with optional budget settings
+- **Self-contained** — Login once with OAuth or manually enter cookies/API keys. No dependencies on other having apps running or scraping from local storage. You know exactly how secrets are being fetched and stored.
+- **Simple state** — All the state the app needs is persisted at `~/.config/llmeter`
+- **Interactive and static usage** — View as an auto-refreshing TUI, or just get a one-time snapshot. Supports JSON output for programmability.
 
 ## Supported Providers
 
@@ -28,10 +36,12 @@ A CLI tool to monitor your LLM subscription and API limits.
 | Provider | ID | How it works | Auth |
 |----------|----|-------------|------|
 | **OpenAI API** | `openai-api` | `GET /v1/organization/costs` | Admin API key |
-| **Anthropic API** | `anthropic-api` | `GET /v1/organizations/cost_report` (may have reporting delay) | Admin API key |
-| **Opencode Zen** | `opencode` | Scrapes workspace page | Auth cookie (see below) |
+| **Anthropic API** | `anthropic-api` | `GET /v1/organizations/cost_report` | Admin API key |
+| **Opencode Zen** | `opencode` | Scrapes workspace page | Auth cookie |
 
 > Note: Anthropic API spend data can lag behind real-time usage.
+
+For more information on how usage data is fetched and parsed, see the [docs](./docs/).
 
 ## Prerequisites
 
@@ -63,7 +73,7 @@ pipx upgrade llmeter
 pipx uninstall llmeter
 ```
 
-Or plain pip:
+Or plain `pip`:
 
 ```bash
 # Install
@@ -82,34 +92,44 @@ uv sync --extra dev
 
 ## Configuration
 
-Config file: `~/.config/llmeter/settings.json`
+Config file lives at `~/.config/llmeter/settings.json`.
 
-Generate a default one:
-
-```bash
-llmeter --init-config
-```
-
-### Example with all providers
+For example:
 
 ```json
 {
   "providers": [
-    { "id": "codex" },
-    { "id": "claude" },
-    { "id": "gemini" },
-    { "id": "copilot" },
-    { "id": "cursor" },
-    { "id": "openai-api", "api_key": "sk-admin-...", "monthly_budget": 50.0 },
-    { "id": "anthropic-api", "api_key": "sk-ant-admin01-...", "monthly_budget": 50.0 },
-    { "id": "opencode", "api_key": "<auth-cookie>", "monthly_budget": 20.0 }
+    { "id": "codex", "enabled": true },
+    { "id": "claude", "enabled": false },
+    { "id": "cursor", "enabled": true },
+    {
+        "id": "openai-api",
+        "api_key": "sk-admin-...",
+        "monthly_budget": 50.0 ,
+        "enabled": false
+    },
+    {
+        "id": "anthropic-api",
+        "api_key": "sk-ant-admin01-...",
+        "monthly_budget": 50.0 ,
+        "enabled": false
+    },
+    {
+        "id": "opencode",
+        "api_key": "<auth-cookie>",
+        "monthly_budget": 20.0,
+        "enabled": true
+    }
   ],
   "refresh_interval": 300
 }
 ```
 
-- **`providers`** — Providers to display, in order. Only listed providers are fetched.
-- **`refresh_interval`** — Auto-refresh interval in seconds (default: 300).
+Generate a default:
+
+```bash
+llmeter --init-config
+```
 
 Provider-specific settings:
 
@@ -126,16 +146,7 @@ All OAuth credentials are stored in a single file:
 ~/.config/llmeter/auth.json
 ```
 
-Each provider stores its tokens under a provider key (`anthropic`, `openai-codex`, `google-gemini-cli`, `github-copilot`). Tokens are auto-refreshed on each run where applicable. The file is created with `0600` permissions.
-
-### Opencode auth
-
-The `opencode` provider uses an HttpOnly session cookie from opencode.ai rather than an API key. Extract it from DevTools:
-
-1. Open [opencode.ai](https://opencode.ai) in your browser and sign in.
-2. Open DevTools → **Application** → **Cookies** → `https://opencode.ai`.
-3. Copy the value of the `auth` cookie.
-4. Set it in config (`"api_key": "<value>"`) or via the `OPENCODE_AUTH_COOKIE` env var.
+Each provider stores its tokens under a provider key. Tokens are auto-refreshed on each run where applicable. The file is created with `0600` permissions.
 
 ### CLI flags
 
@@ -186,7 +197,8 @@ LLMETER_DEBUG_HTTP=1 LLMETER_DEBUG_LOG_PATH=/tmp/llmeter-debug.log llmeter
 Logs include full request metadata (including auth headers/tokens/cookies when present).
 The debug log file is written with user-only permissions when possible (`0600`).
 
-## Credits
+## References
 
-- **[CodexBar](https://github.com/steipete/CodexBar)** — original inspiration
-- **[pi-mono](https://github.com/badlogic/pi-mono)** — referenced for OAuth implementations
+- **[CodexBar](https://github.com/steipete/CodexBar)** — Original inspiration
+- **[pi-mono](https://github.com/badlogic/pi-mono)** — Referenced for OAuth implementations, and my daily driver
+- **[ccusage](https://github.com/ryoppippi/ccusage)** — Also very useful for cost tracking
