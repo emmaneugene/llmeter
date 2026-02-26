@@ -84,7 +84,7 @@ def _save_all(data: dict[str, dict]) -> None:
 # ── Per-provider operations ────────────────────────────────
 
 
-VALID_TYPES = {"oauth", "cookie"}
+VALID_TYPES = {"oauth", "cookie", "api_key"}
 
 
 def load_provider(provider_id: str) -> Optional[dict]:
@@ -115,3 +115,26 @@ def is_expired(creds: dict) -> bool:
     """Check if credentials have expired (with buffer)."""
     expires = creds.get("expires", 0)
     return now_ms() >= expires
+
+
+# ── API key helpers ────────────────────────────────────────
+
+
+def load_api_key(provider_id: str) -> Optional[str]:
+    """Return the stored API key for *provider_id*, or None."""
+    data = load_all()
+    creds = data.get(provider_id)
+    if isinstance(creds, dict) and creds.get("type") == "api_key":
+        key = creds.get("api_key", "")
+        return key.strip() or None
+    return None
+
+
+def save_api_key(provider_id: str, api_key: str) -> None:
+    """Persist an API key for *provider_id* in auth.json."""
+    save_provider(provider_id, {"type": "api_key", "api_key": api_key})
+
+
+def clear_api_key(provider_id: str) -> None:
+    """Remove the stored API key for *provider_id*."""
+    clear_provider(provider_id)

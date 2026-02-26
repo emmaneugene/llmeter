@@ -4,9 +4,9 @@ Uses GET /v1/organizations/cost_report to get actual dollar costs for the
 current billing month. Requires an admin API key (sk-ant-admin01-...).
 
 Config:
-  { "id": "anthropic-api", "api_key": "sk-ant-admin01-...", "monthly_budget": 50.0 }
+  { "id": "anthropic-api", "monthly_budget": 50.0 }
 
-Or set ANTHROPIC_ADMIN_KEY env var. monthly_budget is optional.
+Set ANTHROPIC_ADMIN_KEY env var or run `llmeter --login anthropic-api`. monthly_budget is optional.
 """
 
 from __future__ import annotations
@@ -43,14 +43,14 @@ class AnthropicApiProvider(ApiProvider):
     def no_api_key_error(self) -> str:
         return (
             "Anthropic API key not configured. "
-            "Set ANTHROPIC_ADMIN_KEY env var or add api_key to config."
+            "Set ANTHROPIC_ADMIN_KEY env var or run `llmeter --login anthropic-api`."
         )
 
     def resolve_api_key(self, settings: dict) -> Optional[str]:
+        from ... import auth as _auth
         key = (
-            settings.get("api_key")
+            _auth.load_api_key(self.provider_id)
             or os.environ.get("ANTHROPIC_ADMIN_KEY")
-            or os.environ.get("ANTHROPIC_API_KEY")
             or ""
         ).strip()
         return key or None

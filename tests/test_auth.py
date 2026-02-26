@@ -60,6 +60,46 @@ class TestLoadSave:
         assert mode == 0o600
 
 
+class TestApiKey:
+    """API key helpers."""
+
+    def test_save_and_load_api_key(self, tmp_config_dir: Path) -> None:
+        auth.save_api_key("openai-api", "sk-admin-abc123")
+        assert auth.load_api_key("openai-api") == "sk-admin-abc123"
+
+    def test_load_api_key_returns_none_when_missing(self, tmp_config_dir: Path) -> None:
+        assert auth.load_api_key("openai-api") is None
+
+    def test_clear_api_key(self, tmp_config_dir: Path) -> None:
+        auth.save_api_key("openai-api", "sk-admin-abc123")
+        auth.clear_api_key("openai-api")
+        assert auth.load_api_key("openai-api") is None
+
+    def test_api_key_stored_with_correct_type(self, tmp_config_dir: Path) -> None:
+        auth.save_api_key("anthropic-api", "sk-ant-admin01-xyz")
+        raw = auth.load_all()
+        assert raw["anthropic-api"]["type"] == "api_key"
+        assert raw["anthropic-api"]["api_key"] == "sk-ant-admin01-xyz"
+
+    def test_load_provider_accepts_api_key_type(self, tmp_config_dir: Path) -> None:
+        auth.save_api_key("openai-api", "sk-admin-abc")
+        creds = auth.load_provider("openai-api")
+        assert creds is not None
+        assert creds["type"] == "api_key"
+
+    def test_strips_whitespace_on_load(self, tmp_config_dir: Path) -> None:
+        auth.save_api_key("openai-api", "  sk-admin-padded  ")
+        assert auth.load_api_key("openai-api") == "sk-admin-padded"
+
+    def test_api_key_does_not_leak_into_oauth_slot(self, tmp_config_dir: Path) -> None:
+        auth.save_provider("anthropic", {"type": "oauth", "access": "tok", "refresh": "ref", "expires": 0})
+        auth.save_api_key("anthropic-api", "sk-ant-admin01-xyz")
+        # OAuth slot unaffected
+        assert auth.load_provider("anthropic")["access"] == "tok"
+        # API key slot correct
+        assert auth.load_api_key("anthropic-api") == "sk-ant-admin01-xyz"
+
+
 class TestExpiry:
     """Token expiry checks."""
 

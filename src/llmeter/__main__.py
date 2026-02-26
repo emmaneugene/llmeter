@@ -41,15 +41,22 @@ def main() -> None:
         action="store_true",
         help="Create a default config file and exit.",
     )
+
+    from .cli.auth import LOGIN_HANDLERS, LOGOUT_HANDLERS
+    _login_choices = sorted(LOGIN_HANDLERS)
+    _logout_choices = sorted(LOGOUT_HANDLERS)
+
     parser.add_argument(
         "--login",
         metavar="PROVIDER",
-        help="Authenticate with an auth provider.",
+        choices=_login_choices,
+        help=f"Authenticate with a provider. Choices: {', '.join(_login_choices)}",
     )
     parser.add_argument(
         "--logout",
         metavar="PROVIDER",
-        help="Remove stored credentials for an auth provider.",
+        choices=_logout_choices,
+        help=f"Remove stored credentials for a provider. Choices: {', '.join(_logout_choices)}",
     )
     args = parser.parse_args()
 

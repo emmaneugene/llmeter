@@ -42,11 +42,10 @@ class TestProviderConfig:
             {
                 "id": "openai-api",
                 "enabled": True,
-                "api_key": "sk-test",
                 "monthly_budget": 50.0,
             }
         )
-        assert pc.settings == {"api_key": "sk-test", "monthly_budget": 50.0}
+        assert pc.settings == {"monthly_budget": 50.0}
 
     def test_to_dict_roundtrip(self) -> None:
         original = {"id": "codex", "enabled": True}
@@ -54,9 +53,9 @@ class TestProviderConfig:
         assert pc.to_dict() == original
 
     def test_to_dict_with_settings(self) -> None:
-        pc = ProviderConfig(id="openai-api", enabled=False, settings={"api_key": "sk"})
+        pc = ProviderConfig(id="openai-api", enabled=False, settings={"monthly_budget": 50.0})
         d = pc.to_dict()
-        assert d == {"id": "openai-api", "enabled": False, "api_key": "sk"}
+        assert d == {"id": "openai-api", "enabled": False, "monthly_budget": 50.0}
 
 
 class TestAppConfig:

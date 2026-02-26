@@ -1,9 +1,9 @@
 """OpenAI API billing provider — tracks spend via the /v1/organization/costs endpoint.
 
 Config:
-  { "id": "openai-api", "api_key": "sk-...", "monthly_budget": 100.0 }
+  { "id": "openai-api", "monthly_budget": 100.0 }
 
-Or set OPENAI_API_KEY / OPENAI_ADMIN_KEY env var. monthly_budget is optional.
+Set OPENAI_ADMIN_KEY env var or run `llmeter --login openai-api`. monthly_budget is optional.
 """
 
 from __future__ import annotations
@@ -37,15 +37,15 @@ class OpenAIApiProvider(ApiProvider):
     @property
     def no_api_key_error(self) -> str:
         return (
-            "OpenAI API key not configured. "
-            "Set OPENAI_ADMIN_KEY env var or add api_key to config."
+            "OpenAI admin key not configured. "
+            "Set OPENAI_ADMIN_KEY env var or run `llmeter --login openai-api`."
         )
 
     def resolve_api_key(self, settings: dict) -> Optional[str]:
+        from ... import auth as _auth
         key = (
-            settings.get("api_key")
+            _auth.load_api_key(self.provider_id)
             or os.environ.get("OPENAI_ADMIN_KEY")
-            or os.environ.get("OPENAI_API_KEY")
             or ""
         ).strip()
         return key or None

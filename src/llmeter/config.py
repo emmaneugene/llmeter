@@ -6,14 +6,17 @@ All known providers are listed in the config.  The ``enabled`` flag on each
 entry determines whether it is displayed.  Provider order in the array
 controls the card display order.
 
+Secrets (API keys, OAuth tokens, auth cookies) are stored separately in
+~/.config/llmeter/auth.json.  Use ``llmeter --login <provider>`` to set them.
+
 Example config:
 {
   "providers": [
     { "id": "codex",         "enabled": true },
     { "id": "claude",        "enabled": true },
     { "id": "gemini",        "enabled": false },
-    { "id": "openai-api",    "enabled": false, "api_key": "sk-admin-..." },
-    { "id": "anthropic-api", "enabled": false, "api_key": "sk-ant-admin01-..." }
+    { "id": "openai-api",    "enabled": false, "monthly_budget": 50.0 },
+    { "id": "anthropic-api", "enabled": false, "monthly_budget": 50.0 }
   ],
   "refresh_interval": 120
 }

@@ -14,6 +14,7 @@ from pathlib import Path
 import pytest
 from aioresponses import aioresponses
 
+from llmeter import auth as _auth
 from llmeter.providers.api.opencode import (
     WORKSPACE_ENTRY_URL,
     fetch_opencode_api,
@@ -53,41 +54,39 @@ SAMPLE_HTML = _make_html()
 
 
 class TestOpencodeApiKeyResolution:
-    """resolve_api_key should check settings then env var."""
+    """resolve_api_key should check auth.json then env var."""
 
-    def test_resolves_from_settings(self) -> None:
-        provider = fetch_opencode_api
-        key = provider.resolve_api_key({"api_key": "Fe26.2**from_settings"})
-        assert key == "Fe26.2**from_settings"
+    def test_resolves_from_auth_json(self, tmp_config_dir) -> None:
+        _auth.save_api_key("opencode", "Fe26.2**from_auth")
+        key = fetch_opencode_api.resolve_api_key({})
+        assert key == "Fe26.2**from_auth"
 
-    def test_resolves_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_resolves_from_env(
+        self, tmp_config_dir, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
         monkeypatch.setenv("OPENCODE_AUTH_COOKIE", "Fe26.2**from_env")
         key = fetch_opencode_api.resolve_api_key({})
         assert key == "Fe26.2**from_env"
 
-    def test_settings_takes_priority_over_env(
-        self, monkeypatch: pytest.MonkeyPatch,
+    def test_auth_json_takes_priority_over_env(
+        self, tmp_config_dir, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
+        _auth.save_api_key("opencode", "Fe26.2**from_auth")
         monkeypatch.setenv("OPENCODE_AUTH_COOKIE", "Fe26.2**from_env")
-        key = fetch_opencode_api.resolve_api_key({"api_key": "Fe26.2**from_settings"})
-        assert key == "Fe26.2**from_settings"
+        key = fetch_opencode_api.resolve_api_key({})
+        assert key == "Fe26.2**from_auth"
 
-    def test_returns_none_when_missing(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_returns_none_when_missing(
+        self, tmp_config_dir, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
         monkeypatch.delenv("OPENCODE_AUTH_COOKIE", raising=False)
         key = fetch_opencode_api.resolve_api_key({})
         assert key is None
 
-    def test_strips_whitespace(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.delenv("OPENCODE_AUTH_COOKIE", raising=False)
-        key = fetch_opencode_api.resolve_api_key({"api_key": "  Fe26.2**trimmed  "})
+    def test_strips_whitespace(self, tmp_config_dir) -> None:
+        _auth.save_api_key("opencode", "  Fe26.2**trimmed  ")
+        key = fetch_opencode_api.resolve_api_key({})
         assert key == "Fe26.2**trimmed"
-
-    def test_empty_string_treated_as_missing(
-        self, monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        monkeypatch.delenv("OPENCODE_AUTH_COOKIE", raising=False)
-        key = fetch_opencode_api.resolve_api_key({"api_key": ""})
-        assert key is None
 
 
 # ── 2. Fetch lifecycle ─────────────────────────────────────
@@ -96,13 +95,13 @@ class TestOpencodeApiKeyResolution:
 class TestOpencodeFetch:
     """Test the full fetch path with mocked HTTP."""
 
-    async def test_fetch_with_valid_cookie_from_settings(self) -> None:
+    async def test_fetch_with_valid_cookie_from_auth_json(
+        self, tmp_config_dir,
+    ) -> None:
+        _auth.save_api_key("opencode", "Fe26.2**valid")
         with aioresponses() as mocked:
             mocked.get(WORKSPACE_ENTRY_URL, status=200, body=SAMPLE_HTML)
-            result = await fetch_opencode_api(
-                timeout=10.0,
-                settings={"api_key": "Fe26.2**valid"},
-            )
+            result = await fetch_opencode_api(timeout=10.0)
 
         assert result.error is None
         assert result.source == "api"
@@ -110,7 +109,7 @@ class TestOpencodeFetch:
         assert result.updated_at is not None
 
     async def test_fetch_with_valid_cookie_from_env(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self, tmp_config_dir, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         monkeypatch.setenv("OPENCODE_AUTH_COOKIE", "Fe26.2**from_env")
 
@@ -122,61 +121,57 @@ class TestOpencodeFetch:
         assert result.source == "api"
 
     async def test_fetch_without_key_returns_error(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self, tmp_config_dir, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         monkeypatch.delenv("OPENCODE_AUTH_COOKIE", raising=False)
         result = await fetch_opencode_api(timeout=5.0)
         assert result.error is not None
         assert "OPENCODE_AUTH_COOKIE" in result.error
 
-    async def test_fetch_returns_error_on_401(self) -> None:
+    async def test_fetch_returns_error_on_401(self, tmp_config_dir) -> None:
+        _auth.save_api_key("opencode", "Fe26.2**expired")
         with aioresponses() as mocked:
             mocked.get(WORKSPACE_ENTRY_URL, status=401)
-            result = await fetch_opencode_api(
-                timeout=5.0, settings={"api_key": "Fe26.2**expired"},
-            )
+            result = await fetch_opencode_api(timeout=5.0)
 
         assert result.error is not None
         assert "expired" in result.error.lower() or "invalid" in result.error.lower()
 
-    async def test_fetch_returns_error_on_403(self) -> None:
+    async def test_fetch_returns_error_on_403(self, tmp_config_dir) -> None:
+        _auth.save_api_key("opencode", "Fe26.2**forbidden")
         with aioresponses() as mocked:
             mocked.get(WORKSPACE_ENTRY_URL, status=403)
-            result = await fetch_opencode_api(
-                timeout=5.0, settings={"api_key": "Fe26.2**forbidden"},
-            )
+            result = await fetch_opencode_api(timeout=5.0)
 
         assert result.error is not None
 
-    async def test_fetch_returns_error_on_500(self) -> None:
+    async def test_fetch_returns_error_on_500(self, tmp_config_dir) -> None:
+        _auth.save_api_key("opencode", "Fe26.2**valid")
         with aioresponses() as mocked:
             mocked.get(WORKSPACE_ENTRY_URL, status=500)
-            result = await fetch_opencode_api(
-                timeout=5.0, settings={"api_key": "Fe26.2**valid"},
-            )
+            result = await fetch_opencode_api(timeout=5.0)
 
         assert result.error is not None
         assert "500" in result.error
 
-    async def test_fetch_provider_id_and_meta(self) -> None:
+    async def test_fetch_provider_id_and_meta(self, tmp_config_dir) -> None:
+        _auth.save_api_key("opencode", "Fe26.2**valid")
         with aioresponses() as mocked:
             mocked.get(WORKSPACE_ENTRY_URL, status=200, body=SAMPLE_HTML)
-            result = await fetch_opencode_api(
-                timeout=10.0, settings={"api_key": "Fe26.2**valid"},
-            )
+            result = await fetch_opencode_api(timeout=10.0)
 
         assert result.provider_id == "opencode"
         assert result.display_name == "Opencode Zen API"
 
-    async def test_fetch_uses_monthly_budget_override_when_provided(self) -> None:
+    async def test_fetch_uses_monthly_budget_override_when_provided(
+        self, tmp_config_dir,
+    ) -> None:
+        _auth.save_api_key("opencode", "Fe26.2**valid")
         with aioresponses() as mocked:
             mocked.get(WORKSPACE_ENTRY_URL, status=200, body=SAMPLE_HTML)
             result = await fetch_opencode_api(
                 timeout=10.0,
-                settings={
-                    "api_key": "Fe26.2**valid",
-                    "monthly_budget": "10",
-                },
+                settings={"monthly_budget": "10"},
             )
 
         assert result.primary is not None

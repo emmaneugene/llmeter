@@ -1,12 +1,11 @@
 """opencode.ai Zen provider — tracks balance and monthly spend.
 
 Config:
-  { "id": "opencode", "api_key": "<auth-cookie-value>", "monthly_budget": 50.0 }
+  { "id": "opencode", "monthly_budget": 50.0 }
 
-Or set OPENCODE_AUTH_COOKIE env var.
-
-The ``api_key`` is the value of the HttpOnly ``auth`` cookie from opencode.ai.
-Extract it from DevTools → Application → Cookies → opencode.ai → ``auth``.
+Run `llmeter --login opencode` or set OPENCODE_AUTH_COOKIE env var to supply the
+auth cookie. The cookie is the HttpOnly ``auth`` value from opencode.ai — extract
+it from DevTools → Application → Cookies → opencode.ai → ``auth``.
 
 Data is scraped from the server-rendered workspace page, which embeds all
 billing and usage data as inline JavaScript hydration.  No separate JSON
@@ -60,13 +59,16 @@ class OpencodeProvider(ApiProvider):
     def no_api_key_error(self) -> str:
         return (
             "opencode.ai auth cookie not configured. "
-            "Set OPENCODE_AUTH_COOKIE env var or add api_key to config."
+            "Set OPENCODE_AUTH_COOKIE env var or run `llmeter --login opencode`."
         )
 
     def resolve_api_key(self, settings: dict) -> Optional[str]:
-        """Return the auth cookie value from config or env, or None."""
+        """Return the auth cookie value from auth.json or env, or None."""
+        from ... import auth as _auth
         key = (
-            settings.get("api_key") or os.environ.get("OPENCODE_AUTH_COOKIE") or ""
+            _auth.load_api_key(self.provider_id)
+            or os.environ.get("OPENCODE_AUTH_COOKIE")
+            or ""
         ).strip()
         return key or None
 
@@ -111,7 +113,7 @@ class OpencodeProvider(ApiProvider):
                     if resp.status in (401, 403):
                         result.error = (
                             "opencode.ai session expired or invalid. "
-                            "Update api_key in config or OPENCODE_AUTH_COOKIE."
+                            "Run `llmeter --login opencode` to update the auth cookie."
                         )
                         return result
                     if resp.status != 200:

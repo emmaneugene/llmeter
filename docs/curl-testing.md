@@ -2,9 +2,8 @@
 
 Quick-reference curl commands for manually testing each provider's API endpoints.
 
-> **Prerequisite:** You need valid credentials for each provider. Run the
-> corresponding `llmeter --login <provider>` first, then extract tokens from
-> `~/.config/llmeter/auth.json`.
+> **Prerequisite:** You need valid credentials for each provider. Run the corresponding `llmeter --login <provider>`
+> first, then extract tokens from `~/.config/llmeter/auth.json`.
 
 ---
 
@@ -12,7 +11,7 @@ Quick-reference curl commands for manually testing each provider's API endpoints
 
 1. [Claude (OAuth)](#1-claude-oauth)
 2. [Codex / ChatGPT (OAuth)](#2-codex--chatgpt-oauth)
-3. [Cursor (Cookie)](#3-cursor-cookie)
+3. [Cursor (WorkOS Cookie)](#3-cursor-cookie)
 4. [Gemini CLI (OAuth)](#4-gemini-cli-oauth)
 5. [GitHub Copilot (Device Flow)](#5-github-copilot-device-flow)
 6. [OpenAI API (Admin Key)](#6-openai-api-admin-key)
@@ -85,13 +84,13 @@ curl -s \
   "account": {
     "email": "user@example.com",
     "has_claude_pro": true,
-    "has_claude_max": false
+    "has_claude_max": false,
   },
   "organization": {
     "organization_type": "...",
     "billing_type": "stripe",
-    "rate_limit_tier": "..."
-  }
+    "rate_limit_tier": "...",
+  },
 }
 ```
 
@@ -122,24 +121,24 @@ curl -s \
 
 ```jsonc
 {
-  "plan_type": "pro",                // "free", "plus", "pro", "team", etc.
+  "plan_type": "pro", // "free", "plus", "pro", "team", etc.
   "rate_limit": {
     "primary_window": {
       "used_percent": 15,
-      "reset_at": 1735401600,        // epoch seconds
-      "limit_window_seconds": 18000  // 5 hours
+      "reset_at": 1735401600, // epoch seconds
+      "limit_window_seconds": 18000, // 5 hours
     },
     "secondary_window": {
       "used_percent": 5,
       "reset_at": 1735920000,
-      "limit_window_seconds": 604800 // 7 days
-    }
+      "limit_window_seconds": 604800, // 7 days
+    },
   },
   "credits": {
     "has_credits": true,
     "unlimited": false,
-    "balance": 150.0
-  }
+    "balance": 150.0,
+  },
 }
 ```
 
@@ -169,18 +168,18 @@ curl -s \
 ```jsonc
 {
   "billingCycleEnd": "2025-02-01T00:00:00.000Z",
-  "membershipType": "pro",          // "pro", "hobby", "team", etc.
+  "membershipType": "pro", // "pro", "hobby", "team", etc.
   "individualUsage": {
     "plan": {
-      "used": 1500,                  // cents
-      "limit": 5000,                 // cents
-      "totalPercentUsed": 30.0
+      "used": 1500, // cents
+      "limit": 5000, // cents
+      "totalPercentUsed": 30.0,
     },
     "onDemand": {
-      "used": 500,                   // cents
-      "limit": 10000                 // cents
-    }
-  }
+      "used": 500, // cents
+      "limit": 10000, // cents
+    },
+  },
 }
 ```
 
@@ -200,7 +199,7 @@ curl -s \
 {
   "email": "user@example.com",
   "sub": "user_abc123",
-  "name": "..."
+  "name": "...",
 }
 ```
 
@@ -225,8 +224,8 @@ curl -s \
   "gpt-4": {
     "numRequests": 138,
     "numRequestsTotal": 138,
-    "maxRequestUsage": 500           // present only on request-based plans
-  }
+    "maxRequestUsage": 500, // present only on request-based plans
+  },
 }
 ```
 
@@ -257,9 +256,9 @@ curl -s -X POST \
 ```jsonc
 {
   "currentTier": {
-    "id": "standard-tier"            // "free-tier", "standard-tier", "legacy-tier"
+    "id": "standard-tier", // "free-tier", "standard-tier", "legacy-tier"
   },
-  "cloudaicompanionProject": "my-project-id"
+  "cloudaicompanionProject": "my-project-id",
 }
 ```
 
@@ -288,20 +287,20 @@ curl -s -X POST \
   "buckets": [
     {
       "modelId": "gemini-2.5-pro",
-      "remainingFraction": 0.85,     // 0.0–1.0 (1.0 = fully available)
-      "resetTime": "2025-01-16T00:00:00Z"
+      "remainingFraction": 0.85, // 0.0–1.0 (1.0 = fully available)
+      "resetTime": "2025-01-16T00:00:00Z",
     },
     {
       "modelId": "gemini-2.5-flash",
       "remainingFraction": 0.92,
-      "resetTime": "2025-01-16T00:00:00Z"
-    }
-  ]
+      "resetTime": "2025-01-16T00:00:00Z",
+    },
+  ],
 }
 ```
 
-> **Note:** `remainingFraction` is _remaining_ capacity (not used). The app
-> converts it: `used_percent = 100 - remainingFraction * 100`.
+> **Note:** `remainingFraction` is _remaining_ capacity (not used). The app converts it:
+> `used_percent = 100 - remainingFraction * 100`.
 
 ---
 
@@ -332,39 +331,41 @@ curl -s \
 ```jsonc
 {
   "login": "username",
-  "copilot_plan": "individual",          // "individual", "business", "enterprise"
+  "copilot_plan": "individual", // "individual", "business", "enterprise"
   "assigned_date": null,
   "quota_reset_date": "2026-03-01",
   "quota_reset_date_utc": "2026-03-01T00:00:00.000Z",
   "quota_snapshots": {
-    "chat": {                            // unlimited — skipped by llmeter
+    "chat": {
+      // unlimited — skipped by llmeter
       "entitlement": 0,
       "remaining": 0,
       "percent_remaining": 100.0,
       "quota_id": "chat",
-      "unlimited": true
+      "unlimited": true,
     },
-    "completions": {                     // unlimited — skipped by llmeter
+    "completions": {
+      // unlimited — skipped by llmeter
       "entitlement": 0,
       "remaining": 0,
       "percent_remaining": 100.0,
       "quota_id": "completions",
-      "unlimited": true
+      "unlimited": true,
     },
-    "premium_interactions": {            // the one that matters
-      "entitlement": 300,                // total monthly quota
-      "remaining": 279,                  // remaining this month
-      "percent_remaining": 93.0,         // 0–100 (remaining, not used)
+    "premium_interactions": {
+      // the one that matters
+      "entitlement": 300, // total monthly quota
+      "remaining": 279, // remaining this month
+      "percent_remaining": 93.0, // 0–100 (remaining, not used)
       "quota_id": "premium_interactions",
-      "unlimited": false
-    }
-  }
+      "unlimited": false,
+    },
+  },
 }
 ```
 
-> **Note:** Only `premium_interactions` is tracked (chat/completions are unlimited).
-> `percent_remaining` is _remaining_ capacity. The app converts it:
-> `used_percent = 100 - percent_remaining`.
+> **Note:** Only `premium_interactions` is tracked (chat/completions are unlimited). `percent_remaining` is _remaining_
+> capacity. The app converts it: `used_percent = 100 - percent_remaining`.
 
 ---
 
@@ -407,16 +408,16 @@ curl -s -G \
         {
           "object": "costs.result",
           "amount": {
-            "value": 12.34,            // USD
-            "currency": "usd"
+            "value": 12.34, // USD
+            "currency": "usd",
           },
-          "line_item": "gpt-4o"
-        }
-      ]
-    }
+          "line_item": "gpt-4o",
+        },
+      ],
+    },
   ],
   "has_more": false,
-  "next_page": null                    // pagination token if has_more=true
+  "next_page": null, // pagination token if has_more=true
 }
 ```
 
@@ -459,14 +460,14 @@ curl -s -G \
     {
       "results": [
         {
-          "amount": "1234",            // cents (string), divide by 100 for USD
-          "model": "claude-sonnet-4-20250514"
-        }
-      ]
-    }
+          "amount": "1234", // cents (string), divide by 100 for USD
+          "model": "claude-sonnet-4-20250514",
+        },
+      ],
+    },
   ],
   "has_more": false,
-  "next_page": null                    // pagination token if has_more=true
+  "next_page": null, // pagination token if has_more=true
 }
 ```
 
@@ -476,10 +477,9 @@ curl -s -G \
 
 ## 8. Opencode Zen (Auth Cookie)
 
-**Auth:** The `auth` session cookie from opencode.ai. It's HttpOnly — extract
-it from DevTools → Application → Cookies → opencode.ai → `auth`, or from a
-running CDP session. Set via `api_key` in settings or `OPENCODE_AUTH_COOKIE`
-env var.
+**Auth:** The `auth` session cookie from opencode.ai. It's HttpOnly — extract it from DevTools →
+Application → Cookies → opencode.ai → `auth`, or from a running CDP session. Set via `api_key` in
+settings or `OPENCODE_AUTH_COOKIE` env var.
 
 ```bash
 # Set your auth cookie value (the full Fe26.2** string, not "auth=...")
@@ -488,8 +488,8 @@ OPENCODE_COOKIE="Fe26.2**..."
 
 ### 8a. Fetch Workspace Page (balance, monthly spend, usage history)
 
-The page is server-rendered — all billing data is embedded as inline
-JavaScript. The response is HTML, not JSON, so use `grep` to extract values.
+The page is server-rendered — all billing data is embedded as inline JavaScript. The response is HTML,
+not JSON, so use `grep` to extract values.
 
 ```bash
 curl -s \
@@ -549,16 +549,15 @@ $R[40]($R[24], [
 ]);
 ```
 
-> **Note:** `https://opencode.ai/zen` redirects to
-> `https://opencode.ai/workspace/<workspace_id>`. The `-L` flag follows
+> **Note:** `https://opencode.ai/zen` redirects to `https://opencode.ai/workspace/<workspace_id>`. The `-L` flag follows
 > the redirect automatically.
 
 ---
 
 ## 9. Extracting Tokens from auth.json
 
-After running `llmeter --login <provider>`, credentials are stored in
-`~/.config/llmeter/auth.json`. Here's how to extract them:
+After running `llmeter --login <provider>`, credentials are stored in `~/.config/llmeter/auth.json`. Here's how to
+extract them:
 
 ```bash
 AUTH_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/llmeter/auth.json"
@@ -598,22 +597,22 @@ COPILOT_TOKEN=$(jq -r '.["github-copilot"].access' "$AUTH_FILE")
 
 ### OpenAI API / Anthropic API / Opencode Zen
 
-These use API keys (or cookies-as-keys), not OAuth tokens. They come from
-env vars or `settings.json`:
+These use API keys (or cookies-as-keys), not OAuth tokens. They are stored in `auth.json` (set via
+`llmeter --login <provider>`) or fall back to env vars:
 
 ```bash
-SETTINGS_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/llmeter/settings.json"
+AUTH_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/llmeter/auth.json"
 
 # OpenAI
-OPENAI_ADM_KEY=$(jq -r '.providers[] | select(.id=="openai-api") | .api_key // empty' "$SETTINGS_FILE")
+OPENAI_ADM_KEY=$(jq -r '.["openai-api"].api_key // empty' "$AUTH_FILE" 2>/dev/null)
 : "${OPENAI_ADM_KEY:=$OPENAI_ADMIN_KEY}"   # fall back to env var
 
 # Anthropic
-ANTHROPIC_ADM_KEY=$(jq -r '.providers[] | select(.id=="anthropic-api") | .api_key // empty' "$SETTINGS_FILE")
+ANTHROPIC_ADM_KEY=$(jq -r '.["anthropic-api"].api_key // empty' "$AUTH_FILE" 2>/dev/null)
 : "${ANTHROPIC_ADM_KEY:=$ANTHROPIC_ADMIN_KEY}"   # fall back to env var
 
 # Opencode Zen
-OPENCODE_COOKIE=$(jq -r '.providers[] | select(.id=="opencode") | .api_key // empty' "$SETTINGS_FILE")
+OPENCODE_COOKIE=$(jq -r '.["opencode"].api_key // empty' "$AUTH_FILE" 2>/dev/null)
 : "${OPENCODE_COOKIE:=$OPENCODE_AUTH_COOKIE}"   # fall back to env var
 ```
 
@@ -700,8 +699,8 @@ fi
 echo ""
 echo "=== OpenAI API ==="
 OPENAI_ADM_KEY="${OPENAI_ADMIN_KEY:-}"
-if [[ -z "$OPENAI_ADM_KEY" && -f "$SETTINGS_FILE" ]]; then
-  OPENAI_ADM_KEY=$(jq -r '.providers[]? | select(.id=="openai-api") | .api_key // empty' "$SETTINGS_FILE" 2>/dev/null)
+if [[ -z "$OPENAI_ADM_KEY" && -f "$AUTH_FILE" ]]; then
+  OPENAI_ADM_KEY=$(jq -r '.["openai-api"].api_key // empty' "$AUTH_FILE" 2>/dev/null)
 fi
 if [[ -n "$OPENAI_ADM_KEY" ]]; then
   MONTH_START=$(date -u +%Y-%m-01T00:00:00Z)
@@ -722,8 +721,8 @@ fi
 echo ""
 echo "=== Anthropic API ==="
 ANTHROPIC_ADM_KEY="${ANTHROPIC_ADMIN_KEY:-}"
-if [[ -z "$ANTHROPIC_ADM_KEY" && -f "$SETTINGS_FILE" ]]; then
-  ANTHROPIC_ADM_KEY=$(jq -r '.providers[]? | select(.id=="anthropic-api") | .api_key // empty' "$SETTINGS_FILE" 2>/dev/null)
+if [[ -z "$ANTHROPIC_ADM_KEY" && -f "$AUTH_FILE" ]]; then
+  ANTHROPIC_ADM_KEY=$(jq -r '.["anthropic-api"].api_key // empty' "$AUTH_FILE" 2>/dev/null)
 fi
 if [[ -n "$ANTHROPIC_ADM_KEY" ]]; then
   MONTH_START="$(date -u +%Y-%m-01T00:00:00Z)"
@@ -743,8 +742,8 @@ fi
 echo ""
 echo "=== Opencode Zen ==="
 OPENCODE_COOKIE="${OPENCODE_AUTH_COOKIE:-}"
-if [[ -z "$OPENCODE_COOKIE" && -f "$SETTINGS_FILE" ]]; then
-  OPENCODE_COOKIE=$(jq -r '.providers[]? | select(.id=="opencode") | .api_key // empty' "$SETTINGS_FILE" 2>/dev/null)
+if [[ -z "$OPENCODE_COOKIE" && -f "$AUTH_FILE" ]]; then
+  OPENCODE_COOKIE=$(jq -r '.["opencode"].api_key // empty' "$AUTH_FILE" 2>/dev/null)
 fi
 if [[ -n "$OPENCODE_COOKIE" ]]; then
   curl -sw '\nHTTP %{http_code}\n' \
@@ -762,9 +761,9 @@ fi
 
 ## Common Error Codes
 
-| HTTP Status | Meaning | Fix |
-|---|---|---|
-| **401** | Token expired / invalid | Re-authenticate: `llmeter --login <provider>` |
-| **403** | Missing permissions / wrong key type | Use an admin key; re-login with correct scopes |
-| **429** | Rate limited | Wait and retry |
-| **404** | Endpoint not found | Check URL; API may have changed |
+| HTTP Status | Meaning                              | Fix                                            |
+| ----------- | ------------------------------------ | ---------------------------------------------- |
+| **401**     | Token expired / invalid              | Re-authenticate: `llmeter --login <provider>`  |
+| **403**     | Missing permissions / wrong key type | Use an admin key; re-login with correct scopes |
+| **429**     | Rate limited                         | Wait and retry                                 |
+| **404**     | Endpoint not found                   | Check URL; API may have changed                |

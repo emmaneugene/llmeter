@@ -32,7 +32,7 @@ class ApiProvider(ABC):
         """Error message shown when no API key is found."""
         return (
             f"{self.provider_id} API key not configured. "
-            "Set the relevant environment variable or add api_key to config."
+            "Set the relevant environment variable or run `llmeter --login <provider>`."
         )
 
     @abstractmethod
