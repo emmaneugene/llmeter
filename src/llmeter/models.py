@@ -137,9 +137,6 @@ class ProviderResult:
     secondary_label: str = ""
     tertiary_label: str = ""
 
-    # Set when the provider's data has known reporting delays (e.g. API billing)
-    has_reporting_delay: bool = False
-
     def windows(self) -> list[tuple[str, RateWindow]]:
         """Return (label, window) pairs for each non-None rate window, in order."""
         return [
@@ -168,7 +165,6 @@ class ProviderMeta:
     secondary_label: str = "Weekly"
     tertiary_label: str = "Sonnet"
     default_enabled: bool = False
-    has_reporting_delay: bool = False
 
     def to_result(self, **overrides) -> ProviderResult:
         """Create a ProviderResult pre-filled with this provider's metadata."""
@@ -180,7 +176,6 @@ class ProviderMeta:
             primary_label=self.primary_label,
             secondary_label=self.secondary_label,
             tertiary_label=self.tertiary_label,
-            has_reporting_delay=self.has_reporting_delay,
         )
         kwargs.update(overrides)
         return ProviderResult(**kwargs)
@@ -238,7 +233,6 @@ PROVIDERS: dict[str, ProviderMeta] = {
         icon="◈",
         color="#d4a27f",
         primary_label="Spend",
-        has_reporting_delay=True,
     ),
     "openai-api": ProviderMeta(
         id="openai-api",

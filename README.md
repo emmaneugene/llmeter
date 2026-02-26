@@ -28,8 +28,10 @@ A CLI tool to monitor your LLM subscription and API limits.
 | Provider | ID | How it works | Auth |
 |----------|----|-------------|------|
 | **OpenAI API** | `openai-api` | `GET /v1/organization/costs` | Admin API key |
-| **Anthropic API** | `anthropic-api` | `GET /v1/organizations/cost_report` | Admin API key |
+| **Anthropic API** | `anthropic-api` | `GET /v1/organizations/cost_report` (may have reporting delay) | Admin API key |
 | **Opencode Zen** | `opencode` | Scrapes workspace page | Auth cookie (see below) |
+
+> Note: Anthropic API spend data can lag behind real-time usage.
 
 ## Prerequisites
 
@@ -102,12 +104,12 @@ llmeter --init-config
     { "id": "anthropic-api", "api_key": "sk-ant-admin01-...", "monthly_budget": 50.0 },
     { "id": "opencode", "api_key": "<auth-cookie>", "monthly_budget": 20.0 }
   ],
-  "refresh_interval": 120
+  "refresh_interval": 300
 }
 ```
 
 - **`providers`** — Providers to display, in order. Only listed providers are fetched.
-- **`refresh_interval`** — Auto-refresh interval in seconds (default: 120).
+- **`refresh_interval`** — Auto-refresh interval in seconds (default: 300).
 
 Provider-specific settings:
 
@@ -159,7 +161,7 @@ API keys can also be set via environment variables:
 | `ANTHROPIC_API_KEY` | `anthropic-api` | Fallback |
 | `OPENCODE_AUTH_COOKIE` | `opencode` | Value of the `auth` cookie (see above) |
 
-If no config file exists, `claude` and `codex` are shown by default.
+If no config file exists, no providers are enabled by default. Running `llmeter --login <provider>` will create/update `settings.json` and enable that provider automatically.
 
 ### HTTP debug logging
 

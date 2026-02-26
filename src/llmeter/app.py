@@ -14,7 +14,7 @@ from textual.widgets import Footer, Header, Static
 from . import __version__
 from .backend import fetch_one, placeholder_result
 from .config import AppConfig
-from .models import PROVIDERS, ProviderResult
+from .models import ProviderResult
 from .widgets.provider_card import ProviderCard
 
 
@@ -43,11 +43,6 @@ Run one of these to get started:
 
 Or edit [dim]~/.config/llmeter/settings.json[/dim] and set provider [bold]enabled[/] to [bold]true[/].
 """
-
-DELAY_DISCLAIMER = "* May have reporting delays"
-# Derived from ProviderMeta.has_reporting_delay — no need to maintain separately.
-DELAY_PROVIDER_IDS = {pid for pid, meta in PROVIDERS.items() if meta.has_reporting_delay}
-
 
 class HelpScreen(ModalScreen[None]):
     """Modal overlay showing keybindings and help text."""
@@ -121,8 +116,6 @@ class LLMeterApp(App):
                 yield Vertical(id="provider-list")
             else:
                 yield Static(NO_PROVIDERS_HELP, id="empty-state")
-        if any(pcfg.id in DELAY_PROVIDER_IDS for pcfg in self._config.enabled_providers):
-            yield Static(DELAY_DISCLAIMER, id="legend-bar")
         yield Footer()
 
     def _refresh_interval_text(self) -> str:
