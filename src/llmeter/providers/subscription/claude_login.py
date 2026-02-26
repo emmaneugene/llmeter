@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-import asyncio
 import base64
 import hashlib
+import json
 import os
+import urllib.error
+import urllib.request
 import webbrowser
 from urllib.parse import urlencode
-
-import aiohttp
 
 from ... import auth
 from ..helpers import http_debug_log
@@ -90,7 +90,7 @@ class ClaudeLogin(LoginProvider):
             payload["state"] = state
 
         try:
-            token_data = asyncio.run(_exchange_code(payload))
+            token_data = _exchange_code(payload)
         except Exception as e:
             raise RuntimeError(f"Token exchange failed: {e or type(e).__name__}") from e
 
@@ -105,25 +105,26 @@ class ClaudeLogin(LoginProvider):
         return creds
 
 
-async def _exchange_code(payload: dict, timeout: float = 30.0) -> dict:
+def _exchange_code(payload: dict, timeout: float = 30.0) -> dict:
+    body = json.dumps(payload).encode()
     headers = {"Content-Type": "application/json"}
     http_debug_log(
         "claude-oauth", "token_exchange_request",
         method="POST", url=TOKEN_URL, headers=headers, payload=payload,
     )
-    async with aiohttp.ClientSession() as session:
-        async with session.post(
-            TOKEN_URL, json=payload, headers=headers,
-            timeout=aiohttp.ClientTimeout(total=timeout),
-        ) as resp:
+    req = urllib.request.Request(
+        TOKEN_URL, data=body, headers=headers, method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
             http_debug_log(
                 "claude-oauth", "token_exchange_response",
                 method="POST", url=TOKEN_URL, status=resp.status,
             )
-            if resp.status != 200:
-                body = await resp.text()
-                raise RuntimeError(f"HTTP {resp.status}: {body[:300]}")
-            return await resp.json()
+            return json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        body_text = e.read().decode(errors="replace")[:300]
+        raise RuntimeError(f"HTTP {e.code}: {body_text}") from e
 
 
 # Module-level singleton — __main__.py imports this directly.
