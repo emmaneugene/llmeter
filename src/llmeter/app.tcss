@@ -4,27 +4,6 @@ Screen {
     background: $background;
 }
 
-/* ── Header ─────────────────────────────────────────────── */
-
-#app-header {
-    dock: top;
-    height: 3;
-    background: $primary-background;
-    color: $text;
-    text-align: center;
-    padding: 1 2;
-    text-style: bold;
-}
-
-/* ── Footer / status bar ─────────────────────────────────── */
-
-#status-bar {
-    dock: bottom;
-    height: 1;
-    background: $primary-background;
-    color: $text-muted;
-    padding: 0 2;
-}
 
 /* ── Scrollable body ─────────────────────────────────────── */
 
@@ -41,29 +20,12 @@ Screen {
 
 /* ── Loading / empty state ──────────────────────────────── */
 
-#loading-indicator {
-    width: 1fr;
-    height: 5;
-    content-align: center middle;
-    text-align: center;
-    color: $text-muted;
-}
-
 #empty-state {
     width: 1fr;
     height: 5;
     content-align: center middle;
     text-align: center;
     color: $text-muted;
-}
-
-#error-state {
-    width: 1fr;
-    height: auto;
-    content-align: center middle;
-    text-align: center;
-    color: $error;
-    padding: 2 4;
 }
 
 
