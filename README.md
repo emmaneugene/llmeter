@@ -1,6 +1,6 @@
 # llmeter
 
-A CLI tool to monitor your LLM subscription and API limits.
+Monitor the cost and usage of your AI tools.
 
 ![llmeter demo](docs/demo.png)
 
@@ -11,8 +11,7 @@ subscriptions. `llmeter` helps you do that without toggling between multiple app
 
 ## Features
 
-There are a bunch of tools out there that do similar things, but I found that they were either too complex and invasive,
-or lacking in features. Here's what `llmeter` offers:
+There are a bunch of tools out there that do similar things, but none quite fit what I wanted. Here's what `llmeter` offers:
 
 - **Usage tracking for subscription and API providers**
   - For subscriptions (e.g. Claude, Codex, Cursor), reporting follows providers' respective formats.
@@ -22,7 +21,7 @@ or lacking in features. Here's what `llmeter` offers:
   running or scraping from local storage. You know exactly how secrets are being fetched and stored.
 - **Interactive or static usage** — View in a TUI with auto-refresh or just get a one-time snapshot. Also supports JSON
   output which you can build workflows on top of.
-- **Simple**: Pure Python, minimal dependencies, no system permissions required. App state is fully persisted at `$XDG_CONFIG_HOME/llmeter`.
+- **Simple**: Pure Python, minimal dependencies, no additional OS permissions. App state is fully persisted at `$XDG_CONFIG_HOME/llmeter`.
 
 ## Supported Providers
 
