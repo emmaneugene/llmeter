@@ -20,7 +20,7 @@ from ...models import (
     ProviderResult,
     RateWindow,
 )
-from ..helpers import parse_iso8601, http_get, http_debug_log
+from ..helpers import parse_iso8601, http_get, http_debug_log, DEFAULT_USER_AGENT
 from .base import SubscriptionProvider
 
 # ── OAuth constants ────────────────────────────────────────
@@ -44,7 +44,7 @@ def _claude_headers(token: str) -> dict:
         "Accept": "application/json",
         "Content-Type": "application/json",
         "anthropic-beta": BETA_HEADER,
-        "User-Agent": "LLMeter/0.1.0",
+        "User-Agent": DEFAULT_USER_AGENT,
     }
 
 
@@ -88,7 +88,7 @@ async def refresh_access_token(creds: dict, timeout: float = 30.0) -> dict:
         "client_id": CLIENT_ID,
         "refresh_token": refresh_token,
     }
-    headers = {"Content-Type": "application/json"}
+    headers = {"Content-Type": "application/json", "User-Agent": DEFAULT_USER_AGENT}
     http_debug_log(
         "claude-oauth", "token_refresh_request",
         method="POST", url=TOKEN_URL, headers=headers, payload=payload,

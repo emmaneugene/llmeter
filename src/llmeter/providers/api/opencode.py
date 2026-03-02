@@ -31,7 +31,7 @@ from ...models import (
     ProviderResult,
     RateWindow,
 )
-from ..helpers import http_debug_log
+from ..helpers import http_debug_log, DEFAULT_USER_AGENT
 from .base import ApiProvider
 
 WORKSPACE_ENTRY_URL = "https://opencode.ai/zen"
@@ -84,7 +84,7 @@ class OpencodeProvider(ApiProvider):
         headers = {
             "Cookie": f"auth={api_key}",
             "Accept": "text/html",
-            "User-Agent": "llmeter/1.0",
+            "User-Agent": DEFAULT_USER_AGENT,
         }
 
         http_debug_log(

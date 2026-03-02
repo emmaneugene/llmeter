@@ -20,7 +20,7 @@ from ...models import (
     ProviderResult,
     RateWindow,
 )
-from ..helpers import decode_jwt_payload, http_get, http_debug_log
+from ..helpers import decode_jwt_payload, http_get, http_debug_log, DEFAULT_USER_AGENT
 from .base import SubscriptionProvider
 
 # ── OAuth constants ────────────────────────────────────────
@@ -200,7 +200,7 @@ class CodexProvider(SubscriptionProvider):
         headers = {
             "Authorization": f"Bearer {creds['access']}",
             "ChatGPT-Account-Id": creds["accountId"],
-            "User-Agent": "LLMeter/0.1.0",
+            "User-Agent": DEFAULT_USER_AGENT,
             "Accept": "application/json",
         }
 

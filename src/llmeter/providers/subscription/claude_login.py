@@ -12,7 +12,7 @@ import webbrowser
 from urllib.parse import urlencode
 
 from ... import auth
-from ..helpers import http_debug_log
+from ..helpers import http_debug_log, DEFAULT_USER_AGENT
 from .base import LoginProvider
 from .claude import (
     CLIENT_ID,
@@ -107,7 +107,10 @@ class ClaudeLogin(LoginProvider):
 
 def _exchange_code(payload: dict, timeout: float = 30.0) -> dict:
     body = json.dumps(payload).encode()
-    headers = {"Content-Type": "application/json"}
+    headers = {
+        "Content-Type": "application/json",
+        "User-Agent": DEFAULT_USER_AGENT,
+    }
     http_debug_log(
         "claude-oauth", "token_exchange_request",
         method="POST", url=TOKEN_URL, headers=headers, payload=payload,

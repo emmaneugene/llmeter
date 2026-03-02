@@ -24,7 +24,7 @@ from ...models import (
     ProviderResult,
     RateWindow,
 )
-from ..helpers import http_get, parse_iso8601
+from ..helpers import http_get, parse_iso8601, DEFAULT_USER_AGENT
 from .base import SubscriptionProvider
 
 # ── Auth constants ─────────────────────────────────────────
@@ -94,7 +94,7 @@ class CursorProvider(SubscriptionProvider):
         headers = {
             "Cookie": cookie,
             "Accept": "application/json",
-            "User-Agent": "LLMeter/0.1.0",
+            "User-Agent": DEFAULT_USER_AGENT,
         }
 
         try:
