@@ -200,7 +200,7 @@ class GeminiProvider(SubscriptionProvider):
         timeout: float,
         settings: dict,
     ) -> ProviderResult:
-        result = PROVIDERS["gemini"].to_result(source="api")
+        result = PROVIDERS["gemini"].to_result(source="oauth")
 
         access_token = creds.get("access", "")
         project_id = creds.get("projectId")

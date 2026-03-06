@@ -230,6 +230,7 @@ class TestGeminiUsageEndpoint:
 
         assert result.error is not None
         assert "Unauthorized" in result.error
+        assert result.source == "oauth"
 
     async def test_load_code_assist_parsing(self, tmp_config_dir: Path) -> None:
         """Test the loadCodeAssist helper directly."""
