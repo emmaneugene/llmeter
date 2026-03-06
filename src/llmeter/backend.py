@@ -6,30 +6,11 @@ import asyncio
 from typing import Callable, Awaitable
 
 from .models import ProviderMeta, ProviderResult, PROVIDERS
-from .providers.subscription.codex import fetch_codex
-from .providers.subscription.claude import fetch_claude
-from .providers.subscription.cursor import fetch_cursor
-from .providers.subscription.gemini import fetch_gemini
-from .providers.subscription.copilot import fetch_copilot
-from .providers.api.openai import fetch_openai_api
-from .providers.api.anthropic import fetch_anthropic_api
-from .providers.api.opencode import fetch_opencode_api
+from .provider_registry import PROVIDER_FETCHERS
 
 # Type for provider fetch functions.
 # All fetchers accept (timeout, settings) keyword args.
 FetchFunc = Callable[..., Awaitable[ProviderResult]]
-
-# Registry of supported providers and their default display order.
-PROVIDER_FETCHERS: dict[str, FetchFunc] = {
-    "codex": fetch_codex,
-    "claude": fetch_claude,
-    "cursor": fetch_cursor,
-    "gemini": fetch_gemini,
-    "openai-api": fetch_openai_api,
-    "anthropic-api": fetch_anthropic_api,
-    "copilot": fetch_copilot,
-    "opencode": fetch_opencode_api,
-}
 
 # Canonical display order — derived from PROVIDERS insertion order so there is
 # a single source of truth.  The `default_enabled` flag on each ProviderMeta
