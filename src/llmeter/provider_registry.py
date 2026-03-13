@@ -187,18 +187,18 @@ PROVIDER_RUNTIMES: dict[str, ProviderRuntime] = {
             "No Anthropic API key stored.",
         ),
     ),
-    "opencode": ProviderRuntime(
+    "opencode-zen": ProviderRuntime(
         fetcher=fetch_opencode_api,
         auth_kind="api",
         login_handler=_make_api_login(
-            "opencode",
-            "opencode.ai auth cookie (Fe26.2**...): ",
-            "✓ opencode.ai auth cookie saved to auth.json.",
+            "opencode-zen",
+            "OpenCode Zen auth cookie (Fe26.2**...): ",
+            "✓ OpenCode Zen auth cookie saved to auth.json.",
         ),
         logout_handler=_make_api_logout(
-            "opencode",
-            "✓ Removed opencode.ai auth cookie.",
-            "No opencode.ai auth cookie stored.",
+            "opencode-zen",
+            "✓ Removed OpenCode Zen auth cookie.",
+            "No OpenCode Zen auth cookie stored.",
         ),
     ),
 }

@@ -49,8 +49,8 @@ class TestOpenCodeGoCredentials:
         creds = load_credentials()
         assert creds == {"type": "cookie", "cookie": "Fe26.2**cookie"}
 
-    def test_load_falls_back_to_shared_opencode_cookie(self, tmp_config_dir: Path) -> None:
-        _auth.save_api_key("opencode", "Fe26.2**shared")
+    def test_load_falls_back_to_shared_opencode_zen_cookie(self, tmp_config_dir: Path) -> None:
+        _auth.save_api_key("opencode-zen", "Fe26.2**shared")
         creds = load_credentials()
         assert creds == {"type": "cookie", "cookie": "Fe26.2**shared"}
 
@@ -82,8 +82,8 @@ class TestOpenCodeGoFetch:
         assert result.tertiary is not None
         assert result.updated_at is not None
 
-    async def test_fetch_falls_back_to_shared_opencode_cookie(self, tmp_config_dir: Path) -> None:
-        _auth.save_api_key("opencode", "Fe26.2**shared")
+    async def test_fetch_falls_back_to_shared_opencode_zen_cookie(self, tmp_config_dir: Path) -> None:
+        _auth.save_api_key("opencode-zen", "Fe26.2**shared")
         with aioresponses() as mocked:
             mocked.get(GO_ENTRY_URL, status=200, body=ENTRY_HTML)
             mocked.get(WORKSPACE_URL, status=200, body=WORKSPACE_HTML)

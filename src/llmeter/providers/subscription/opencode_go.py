@@ -1,7 +1,7 @@
 """OpenCode Go provider — tracks rolling, weekly, and monthly usage.
 
-Run `llmeter --login opencode-go` or `llmeter --login opencode` to supply the
-opencode.ai `auth` cookie. The cookie is the HttpOnly `auth` value from
+Run `llmeter --login opencode-go` or `llmeter --login opencode-zen` to supply
+the opencode.ai `auth` cookie. The cookie is the HttpOnly `auth` value from
 opencode.ai — extract it from DevTools → Application → Cookies → opencode.ai →
 `auth`.
 
@@ -25,7 +25,7 @@ from ..helpers import DEFAULT_USER_AGENT, http_debug_log
 from .base import SubscriptionProvider
 
 PROVIDER_KEY = "opencode-go"
-_SHARED_PROVIDER_KEY = "opencode"
+_SHARED_PROVIDER_KEY = "opencode-zen"
 GO_ENTRY_URL = "https://opencode.ai/go"
 
 _RE_WORKSPACE_GO_URL = re.compile(
@@ -109,7 +109,7 @@ class OpencodeGoProvider(SubscriptionProvider):
     def no_credentials_error(self) -> str:
         return (
             "OpenCode Go auth cookie not configured. "
-            "Run `llmeter --login opencode-go`, `llmeter --login opencode`, "
+            "Run `llmeter --login opencode-go`, `llmeter --login opencode-zen`, "
             "or set OPENCODE_AUTH_COOKIE."
         )
 
@@ -217,7 +217,7 @@ async def _fetch_html(
         if resp.status in (401, 403):
             raise RuntimeError(
                 "OpenCode session expired or invalid. "
-                "Run `llmeter --login opencode-go` or `llmeter --login opencode` "
+                "Run `llmeter --login opencode-go` or `llmeter --login opencode-zen` "
                 "to update the auth cookie."
             )
         if resp.status != 200:

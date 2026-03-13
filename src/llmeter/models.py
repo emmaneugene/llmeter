@@ -260,8 +260,8 @@ PROVIDERS: dict[str, ProviderMeta] = {
         secondary_label="Weekly",
         tertiary_label="Monthly",
     ),
-    "opencode": ProviderMeta(
-        id="opencode",
+    "opencode-zen": ProviderMeta(
+        id="opencode-zen",
         name="OpenCode Zen API",
         icon="◆",
         color="#F5EFEA",
