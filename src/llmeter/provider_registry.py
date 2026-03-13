@@ -23,6 +23,7 @@ from .providers.subscription.codex import fetch_codex
 from .providers.subscription.copilot import fetch_copilot
 from .providers.subscription.cursor import fetch_cursor
 from .providers.subscription.gemini import fetch_gemini
+from .providers.subscription.opencode_go import fetch_opencode_go
 
 FetchFunc = Callable[..., Awaitable[ProviderResult]]
 AuthKind = Literal["subscription", "api"]
@@ -142,6 +143,20 @@ PROVIDER_RUNTIMES: dict[str, ProviderRuntime] = {
         ),
         logout_handler=_make_subscription_logout(
             "Cursor", "llmeter.providers.subscription.cursor"
+        ),
+    ),
+    "opencode-go": ProviderRuntime(
+        fetcher=fetch_opencode_go,
+        auth_kind="subscription",
+        login_handler=_make_api_login(
+            "opencode-go",
+            "opencode.ai auth cookie (Fe26.2**...): ",
+            "✓ OpenCode Go auth cookie saved to auth.json.",
+        ),
+        logout_handler=_make_api_logout(
+            "opencode-go",
+            "✓ Removed OpenCode Go auth cookie.",
+            "No OpenCode Go auth cookie stored.",
         ),
     ),
     "openai-api": ProviderRuntime(

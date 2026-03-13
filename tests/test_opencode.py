@@ -161,7 +161,7 @@ class TestOpencodeFetch:
             result = await fetch_opencode_api(timeout=10.0)
 
         assert result.provider_id == "opencode"
-        assert result.display_name == "Opencode Zen API"
+        assert result.display_name == "OpenCode Zen API"
 
     async def test_fetch_uses_monthly_budget_override_when_provided(
         self, tmp_config_dir,
@@ -296,7 +296,7 @@ class TestOpencodeProviderMeta:
     def test_provider_meta_fields(self) -> None:
         meta = PROVIDERS["opencode"]
         assert meta.id == "opencode"
-        assert meta.name == "Opencode Zen API"
+        assert meta.name == "OpenCode Zen API"
         assert meta.icon
         assert meta.color.startswith("#")
         assert not meta.default_enabled
