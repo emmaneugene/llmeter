@@ -89,6 +89,7 @@ Singletons are registered in `backend.py` via the `PROVIDER_FETCHERS` dict.
 ### Configuration
 
 - App config: `~/.config/llmeter/settings.json` — controls enabled providers, order, API keys, refresh interval.
+- Provider entries support provider-specific keys in addition to `id`/`enabled` (e.g. Claude `user_agent`).
 - Auth store: `~/.config/llmeter/auth.json` — unified OAuth token storage for all providers.
 - Config dir follows XDG conventions (`XDG_CONFIG_HOME`).
 

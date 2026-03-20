@@ -20,7 +20,7 @@ from ...models import (
     ProviderResult,
     RateWindow,
 )
-from ..helpers import parse_iso8601, http_get, http_debug_log, DEFAULT_USER_AGENT
+from ..helpers import http_debug_log, http_get, parse_iso8601
 from .base import SubscriptionProvider
 
 # ── OAuth constants ────────────────────────────────────────
@@ -37,14 +37,19 @@ PROVIDER_ID = "anthropic"
 OAUTH_USAGE_URL = "https://api.anthropic.com/api/oauth/usage"
 OAUTH_PROFILE_URL = "https://api.anthropic.com/api/oauth/profile"
 BETA_HEADER = "oauth-2025-04-20"
+CLAUDE_CODE_USER_AGENT = "claude-code/2.1.80"
 
-def _claude_headers(token: str) -> dict:
+
+def _claude_headers(
+    token: str,
+    user_agent: str = CLAUDE_CODE_USER_AGENT,
+) -> dict:
     return {
         "Authorization": f"Bearer {token}",
         "Accept": "application/json",
         "Content-Type": "application/json",
         "anthropic-beta": BETA_HEADER,
-        "User-Agent": DEFAULT_USER_AGENT,
+        "User-Agent": user_agent,
     }
 
 
@@ -88,7 +93,10 @@ async def refresh_access_token(creds: dict, timeout: float = 30.0) -> dict:
         "client_id": CLIENT_ID,
         "refresh_token": refresh_token,
     }
-    headers = {"Content-Type": "application/json", "User-Agent": DEFAULT_USER_AGENT}
+    headers = {
+        "Content-Type": "application/json",
+        "User-Agent": CLAUDE_CODE_USER_AGENT,
+    }
     http_debug_log(
         "claude-oauth", "token_refresh_request",
         method="POST", url=TOKEN_URL, headers=headers, payload=payload,
@@ -142,6 +150,10 @@ async def get_valid_access_token(timeout: float = 30.0) -> Optional[str]:
 class ClaudeProvider(SubscriptionProvider):
     """Fetches Claude usage via the OAuth usage API."""
 
+    def __init__(self) -> None:
+        self._identity_token: str | None = None
+        self._cached_identity: ProviderIdentity | None = None
+
     @property
     def provider_id(self) -> str:
         return "claude"
@@ -163,11 +175,12 @@ class ClaudeProvider(SubscriptionProvider):
         settings: dict,
     ) -> ProviderResult:
         access_token = creds
+        user_agent = str(settings.get("user_agent") or CLAUDE_CODE_USER_AGENT)
         result = PROVIDERS["claude"].to_result()
 
         try:
             usage = await http_get(
-                "claude", OAUTH_USAGE_URL, _claude_headers(access_token), timeout,
+                "claude", OAUTH_USAGE_URL, _claude_headers(access_token, user_agent=user_agent), timeout,
                 label="usage",
                 errors={
                     401: (
@@ -225,12 +238,23 @@ class ClaudeProvider(SubscriptionProvider):
                     currency=extra.get("currency", "USD") or "USD",
                 )
 
-        profile = await _fetch_account_info(access_token, timeout=timeout)
-        if profile:
-            result.identity = ProviderIdentity(
-                account_email=profile.get("email"),
-                login_method=profile.get("plan"),
+        if self._identity_token != access_token:
+            profile = await _fetch_account_info(
+                access_token,
+                timeout=timeout,
+                user_agent=user_agent,
             )
+            self._identity_token = access_token
+            self._cached_identity = (
+                ProviderIdentity(
+                    account_email=profile.get("email"),
+                    login_method=profile.get("plan"),
+                )
+                if profile
+                else None
+            )
+
+        result.identity = self._cached_identity
 
         result.source = "oauth"
         result.updated_at = datetime.now(timezone.utc)
@@ -242,11 +266,15 @@ class ClaudeProvider(SubscriptionProvider):
 async def _fetch_account_info(
     access_token: str,
     timeout: float = 30.0,
+    user_agent: str = CLAUDE_CODE_USER_AGENT,
 ) -> Optional[dict]:
     """Fetch account email and plan from the OAuth profile endpoint."""
     try:
         data = await http_get(
-            "claude", OAUTH_PROFILE_URL, _claude_headers(access_token), min(timeout, 10),
+            "claude",
+            OAUTH_PROFILE_URL,
+            _claude_headers(access_token, user_agent=user_agent),
+            min(timeout, 10),
             label="profile",
         )
     except Exception:

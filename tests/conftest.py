@@ -9,6 +9,18 @@ from typing import Generator
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def reset_claude_singleton_state() -> Generator[None, None, None]:
+    """Reset Claude provider singleton cache state between tests."""
+    from llmeter.providers.subscription.claude import fetch_claude
+
+    fetch_claude._cached_identity = None
+    fetch_claude._identity_token = None
+    yield
+    fetch_claude._cached_identity = None
+    fetch_claude._identity_token = None
+
+
 @pytest.fixture()
 def tmp_config_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """Redirect XDG_CONFIG_HOME to a temp directory so auth.json is isolated."""

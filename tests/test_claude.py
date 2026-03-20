@@ -8,23 +8,25 @@ Covers:
 
 from __future__ import annotations
 
-import json
 import time
 from pathlib import Path
 
 import pytest
 from aioresponses import aioresponses
+from yarl import URL
 
-from llmeter import auth
 from llmeter.providers.subscription.claude import (
-    save_credentials,
-    load_credentials,
-    clear_credentials,
-    is_token_expired,
+    CLAUDE_CODE_USER_AGENT,
+    OAUTH_PROFILE_URL,
+    OAUTH_USAGE_URL,
     TOKEN_URL,
-    refresh_access_token,
-    get_valid_access_token,
+    clear_credentials,
     fetch_claude,
+    get_valid_access_token,
+    is_token_expired,
+    load_credentials,
+    refresh_access_token,
+    save_credentials,
 )
 
 
@@ -258,3 +260,64 @@ class TestClaudeUsageParsing:
         assert result.secondary is None
         assert result.tertiary is None
         assert result.cost is None
+
+
+class TestClaudeProfileCaching:
+    async def test_profile_endpoint_called_once_per_token(self, tmp_config_dir: Path) -> None:
+        future = int(time.time() * 1000) + 3600_000
+        save_credentials({
+            "type": "oauth", "access": "tok", "refresh": "ref", "expires": future,
+        })
+
+        with aioresponses() as mocked:
+            mocked.get(OAUTH_USAGE_URL, payload=SAMPLE_USAGE_RESPONSE, repeat=True)
+            mocked.get(
+                OAUTH_PROFILE_URL,
+                payload={
+                    "account": {"email": "cached@example.com", "has_claude_pro": True},
+                    "organization": {},
+                },
+                repeat=True,
+            )
+            first = await fetch_claude(timeout=10.0)
+            second = await fetch_claude(timeout=10.0)
+
+        assert first.error is None
+        assert second.error is None
+        assert second.identity is not None
+        assert second.identity.account_email == "cached@example.com"
+        assert len(mocked.requests[("GET", URL(OAUTH_USAGE_URL))]) == 2
+        assert len(mocked.requests[("GET", URL(OAUTH_PROFILE_URL))]) == 1
+
+
+class TestClaudeUserAgent:
+    async def test_default_user_agent_header(self, tmp_config_dir: Path) -> None:
+        future = int(time.time() * 1000) + 3600_000
+        save_credentials({
+            "type": "oauth", "access": "tok", "refresh": "ref", "expires": future,
+        })
+
+        with aioresponses() as mocked:
+            mocked.get(OAUTH_USAGE_URL, payload={"five_hour": {"utilization": 10.0}})
+            mocked.get(OAUTH_PROFILE_URL, status=404)
+            result = await fetch_claude(timeout=10.0)
+
+        assert result.error is None
+        usage_call = mocked.requests[("GET", URL(OAUTH_USAGE_URL))][0]
+        assert usage_call.kwargs["headers"]["User-Agent"] == CLAUDE_CODE_USER_AGENT
+
+    async def test_user_agent_can_be_overridden_in_provider_settings(self, tmp_config_dir: Path) -> None:
+        future = int(time.time() * 1000) + 3600_000
+        save_credentials({
+            "type": "oauth", "access": "tok", "refresh": "ref", "expires": future,
+        })
+
+        custom_ua = "claude-code/2.5.0"
+        with aioresponses() as mocked:
+            mocked.get(OAUTH_USAGE_URL, payload={"five_hour": {"utilization": 10.0}})
+            mocked.get(OAUTH_PROFILE_URL, status=404)
+            result = await fetch_claude(timeout=10.0, settings={"user_agent": custom_ua})
+
+        assert result.error is None
+        usage_call = mocked.requests[("GET", URL(OAUTH_USAGE_URL))][0]
+        assert usage_call.kwargs["headers"]["User-Agent"] == custom_ua

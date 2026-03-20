@@ -97,7 +97,7 @@ For example:
 {
   "providers": [
     { "id": "codex", "enabled": true },
-    { "id": "claude", "enabled": false },
+    { "id": "claude", "enabled": false, "user_agent": "claude-code/2.5.0" },
     { "id": "cursor", "enabled": true },
     { "id": "openai-api", "monthly_budget": 50.0, "enabled": false },
     { "id": "anthropic-api", "monthly_budget": 50.0, "enabled": false },
@@ -106,6 +106,17 @@ For example:
   "refresh_interval": 300
 }
 ```
+
+### Provider-specific settings
+
+Provider entries in `providers` can include additional keys beyond `id` and `enabled`.
+
+| Provider ID | Setting         | Type    | Description |
+| --- | --- | --- | --- |
+| `claude` | `user_agent` | string | Overrides Claude OAuth API User-Agent. Default: `claude-code/2.1.80` |
+| `openai-api` | `monthly_budget` | number | Monthly USD budget used for spend percentage |
+| `anthropic-api` | `monthly_budget` | number | Monthly USD budget used for spend percentage |
+| `opencode` | `monthly_budget` | number | Optional override for platform monthly limit |
 
 Generate a default:
 

@@ -12,13 +12,14 @@ import webbrowser
 from urllib.parse import urlencode
 
 from ... import auth
-from ..helpers import http_debug_log, DEFAULT_USER_AGENT
+from ..helpers import http_debug_log
 from .base import LoginProvider
 from .claude import (
+    CLAUDE_CODE_USER_AGENT,
     CLIENT_ID,
-    TOKEN_URL,
     REDIRECT_URI,
     SCOPES,
+    TOKEN_URL,
     save_credentials,
 )
 
@@ -109,7 +110,7 @@ def _exchange_code(payload: dict, timeout: float = 30.0) -> dict:
     body = json.dumps(payload).encode()
     headers = {
         "Content-Type": "application/json",
-        "User-Agent": DEFAULT_USER_AGENT,
+        "User-Agent": CLAUDE_CODE_USER_AGENT,
     }
     http_debug_log(
         "claude-oauth", "token_exchange_request",

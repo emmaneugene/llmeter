@@ -41,6 +41,10 @@ access + refresh token pair. Tokens are stored in `auth.json` and automatically 
 **Notes:**
 
 - The `anthropic-beta: oauth-2025-04-20` header is required on all calls
+- The request `User-Agent` defaults to `claude-code/2.1.80` (Claude CLI style) and can be overridden per provider in
+  `settings.json` via `"user_agent"`
+- Profile identity (`/api/oauth/profile`) is cached per access token; after the first successful fetch for a token,
+  subsequent refresh cycles skip the profile request
 - The refresh token is long-lived; re-login is rarely needed
 
 ---
