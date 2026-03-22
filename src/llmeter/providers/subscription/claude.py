@@ -36,8 +36,8 @@ PROVIDER_ID = "anthropic"
 
 OAUTH_USAGE_URL = "https://api.anthropic.com/api/oauth/usage"
 OAUTH_PROFILE_URL = "https://api.anthropic.com/api/oauth/profile"
-BETA_HEADER = "oauth-2025-04-20"
-CLAUDE_CODE_USER_AGENT = "claude-code/2.1.80"
+BETA_HEADER = "claude-code-20250219,oauth-2025-04-20"
+CLAUDE_CODE_USER_AGENT = "claude-cli/2.1.75"
 
 
 def _claude_headers(
@@ -50,6 +50,7 @@ def _claude_headers(
         "Content-Type": "application/json",
         "anthropic-beta": BETA_HEADER,
         "User-Agent": user_agent,
+        "x-app": "cli",
     }
 
 
