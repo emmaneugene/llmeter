@@ -370,7 +370,6 @@ class TestOpencodeProviderMeta:
         assert meta.id == PROVIDER_KEY
         assert meta.name == "OpenCode Zen API"
         assert meta.icon
-        assert meta.color.startswith("#")
         assert not meta.default_enabled
 
     def test_provider_in_fetchers(self) -> None:

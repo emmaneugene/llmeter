@@ -18,7 +18,7 @@ FetchFunc = Callable[..., Awaitable[ProviderResult]]
 ALL_PROVIDER_ORDER: list[str] = list(PROVIDERS)
 
 
-_FALLBACK_META = ProviderMeta(id="?", name="Unknown", icon="●", color="#888888")
+_FALLBACK_META = ProviderMeta(id="?", name="Unknown", icon="●")
 
 
 def placeholder_result(provider_id: str) -> ProviderResult:

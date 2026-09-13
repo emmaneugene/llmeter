@@ -14,6 +14,7 @@ from llmeter.config import (
     init_config,
     load_config,
     config_path,
+    set_theme,
 )
 
 
@@ -312,3 +313,49 @@ class TestLoadConfig:
         assert cfg.provider_ids == []
         assert "codex" in cfg.all_provider_ids
         assert "claude" in cfg.all_provider_ids
+
+
+class TestThemePersistence:
+    def test_load_reads_theme(self, tmp_config_dir: Path) -> None:
+        path = config_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"theme": "catppuccin-latte", "providers": []}))
+
+        cfg = load_config()
+        assert cfg.theme == "catppuccin-latte"
+
+    def test_load_theme_defaults_to_none(self, tmp_config_dir: Path) -> None:
+        path = config_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"providers": []}))
+
+        assert load_config().theme is None
+
+    def test_load_rejects_non_string_theme(self, tmp_config_dir: Path) -> None:
+        path = config_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"theme": 42, "providers": []}))
+
+        assert load_config().theme is None
+
+    def test_set_theme_preserves_providers(self, tmp_config_dir: Path) -> None:
+        path = config_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        original = {
+            "providers": [{"id": "codex", "enabled": True}],
+            "refresh_interval": 300,
+        }
+        path.write_text(json.dumps(original))
+
+        set_theme("solarized-light")
+
+        data = json.loads(path.read_text())
+        assert data["theme"] == "solarized-light"
+        assert data["providers"] == original["providers"]
+        assert data["refresh_interval"] == 300
+
+    def test_set_theme_creates_config_when_missing(self, tmp_config_dir: Path) -> None:
+        set_theme("dracula")
+
+        data = json.loads(config_path().read_text())
+        assert data["theme"] == "dracula"

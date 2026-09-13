@@ -21,7 +21,7 @@ class ProviderCard(Widget):
         width: 1fr;
         margin: 0 1;
         padding: 1 2;
-        border: round $secondary;
+        border: round $primary;
         background: $surface;
         margin-bottom: 1;
         border-title-align: center;
@@ -67,7 +67,6 @@ class ProviderCard(Widget):
         d = self.data
         version = f" {d.version}" if d.version else ""
         self.border_title = f"{d.icon}  {d.display_name}{version}"
-        self.styles.border = ("round", d.color)
 
     def on_mount(self) -> None:
         self._apply_border()

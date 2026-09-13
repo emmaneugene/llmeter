@@ -119,7 +119,6 @@ class ProviderResult:
     provider_id: str
     display_name: str
     icon: str
-    color: str
     source: str = "unknown"
     primary: Optional[RateWindow] = None
     secondary: Optional[RateWindow] = None
@@ -170,7 +169,6 @@ class ProviderMeta:
     id: str
     name: str
     icon: str
-    color: str
     primary_label: str = "Session"
     secondary_label: str = "Weekly"
     tertiary_label: str = "Sonnet"
@@ -182,7 +180,6 @@ class ProviderMeta:
             provider_id=self.id,
             display_name=self.name,
             icon=self.icon,
-            color=self.color,
             primary_label=self.primary_label,
             secondary_label=self.secondary_label,
             tertiary_label=self.tertiary_label,
@@ -199,7 +196,6 @@ PROVIDERS: dict[str, ProviderMeta] = {
         id="claude",
         name="Claude",
         icon="◈",
-        color="#d4a27f",
         primary_label="Session (5h)",
         secondary_label="Weekly",
         tertiary_label="Sonnet",
@@ -209,7 +205,6 @@ PROVIDERS: dict[str, ProviderMeta] = {
         id="codex",
         name="Codex",
         icon="⬡",
-        color="#10a37f",
         primary_label="Session (5h)",
         secondary_label="Weekly",
         default_enabled=True,
@@ -218,7 +213,6 @@ PROVIDERS: dict[str, ProviderMeta] = {
         id="gemini",
         name="Gemini",
         icon="✦",
-        color="#ab87ea",
         primary_label="Pro (24h)",
         secondary_label="Flash (24h)",
     ),
@@ -226,7 +220,6 @@ PROVIDERS: dict[str, ProviderMeta] = {
         id="cursor",
         name="Cursor",
         icon="⦿",
-        color="#848484",
         primary_label="Plan",
         secondary_label="On-Demand",
     ),
@@ -234,28 +227,24 @@ PROVIDERS: dict[str, ProviderMeta] = {
         id="copilot",
         name="Copilot",
         icon="⬠",
-        color="#6e40c9",
         primary_label="Premium (Monthly)",
     ),
     "anthropic-api": ProviderMeta(
         id="anthropic-api",
         name="Anthropic API",
         icon="◈",
-        color="#d4a27f",
         primary_label="Spend",
     ),
     "openai-api": ProviderMeta(
         id="openai-api",
         name="OpenAI API",
         icon="⬡",
-        color="#10a37f",
         primary_label="Spend",
     ),
     "opencode-go": ProviderMeta(
         id="opencode-go",
         name="OpenCode Go",
         icon="◉",
-        color="#F5EFEA",
         primary_label="Rolling",
         secondary_label="Weekly",
         tertiary_label="Monthly",
@@ -264,14 +253,12 @@ PROVIDERS: dict[str, ProviderMeta] = {
         id="opencode-zen",
         name="OpenCode Zen API",
         icon="◆",
-        color="#F5EFEA",
         primary_label="Monthly",
     ),
     "openrouter": ProviderMeta(
         id="openrouter",
         name="OpenRouter",
         icon="◇",
-        color="#6467F2",
         primary_label="Spend",
     ),
 }

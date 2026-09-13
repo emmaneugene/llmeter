@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import json
+
 from llmeter.app import LLMeterApp
-from llmeter.config import AppConfig, ProviderConfig
+from llmeter.config import AppConfig, ProviderConfig, config_path, load_config
 from llmeter.models import PROVIDERS
 
 
@@ -118,3 +120,27 @@ async def test_action_refresh_rebuilds_dom_when_provider_list_changes(
     await app.action_refresh()
 
     assert rebuild_calls == [1]
+
+
+async def test_saved_theme_applied_on_mount(tmp_config_dir) -> None:
+    path = config_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"theme": "catppuccin-latte", "providers": []}))
+
+    app = LLMeterApp(config=load_config())
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        assert app.theme == "catppuccin-latte"
+
+
+async def test_cycle_theme_persists(tmp_config_dir) -> None:
+    path = config_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"providers": []}))
+
+    app = LLMeterApp(config=load_config())
+    async with app.run_test() as pilot:
+        app.action_cycle_theme()
+        await pilot.pause()
+        saved = json.loads(path.read_text())
+        assert saved["theme"] == app.theme

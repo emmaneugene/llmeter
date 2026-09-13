@@ -57,7 +57,7 @@ class ApiProvider(ABC):
     ) -> ProviderResult:
         settings = settings or {}
         meta = PROVIDERS.get(self.provider_id) or ProviderMeta(
-            id=self.provider_id, name=self.provider_id, icon="●", color="#888888"
+            id=self.provider_id, name=self.provider_id, icon="●"
         )
         result = meta.to_result(source="api")
 

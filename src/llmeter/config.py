@@ -70,6 +70,7 @@ class AppConfig:
     """Top-level application configuration."""
     providers: list[ProviderConfig] = field(default_factory=list)
     refresh_interval: float = 300.0  # 5 minutes
+    theme: str | None = None
 
     MIN_REFRESH = 60.0    # 1 minute
     MAX_REFRESH = 3600.0  # 1 hour
@@ -101,9 +102,11 @@ class AppConfig:
         providers = [ProviderConfig.from_dict(p) for p in d.get("providers", [])]
         raw_interval = d.get("refresh_interval", 300.0)
         clamped = max(cls.MIN_REFRESH, min(cls.MAX_REFRESH, float(raw_interval)))
+        theme = d.get("theme")
         return cls(
             providers=providers,
             refresh_interval=clamped,
+            theme=theme if isinstance(theme, str) and theme else None,
         )
 
     @classmethod
@@ -170,20 +173,31 @@ def init_config() -> None:
     print(f"Created config: {path}")
 
 
+def _read_settings() -> dict:
+    """Load settings.json contents, or {} when missing or invalid."""
+    path = config_path()
+    try:
+        return json.loads(path.read_text()) if path.exists() else {}
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def set_theme(theme: str) -> None:
+    """Persist the theme name as a top-level 'theme' key in settings.json."""
+    data = _read_settings()
+    data["theme"] = theme
+    path = config_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, indent=2) + "\n")
+
+
 def enable_provider(provider_id: str) -> None:
     """Enable a provider in settings.json, creating the file if needed.
 
     If the provider isn't listed yet, it is appended.  If it's already
     enabled, this is a no-op.
     """
-    path = config_path()
-    if path.exists():
-        try:
-            data = json.loads(path.read_text())
-        except (json.JSONDecodeError, OSError):
-            data = {}
-    else:
-        data = {}
+    data = _read_settings()
 
     providers = data.get("providers", [])
 
@@ -202,5 +216,6 @@ def enable_provider(provider_id: str) -> None:
     if "refresh_interval" not in data:
         data["refresh_interval"] = 300
 
+    path = config_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, indent=2) + "\n")

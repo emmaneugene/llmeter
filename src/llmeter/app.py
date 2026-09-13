@@ -13,7 +13,7 @@ from textual.widgets import Footer, Header, Static
 
 from . import __version__
 from .backend import fetch_one, placeholder_result
-from .config import AppConfig
+from .config import AppConfig, set_theme
 from .models import ProviderResult
 from .widgets.provider_card import ProviderCard
 
@@ -107,7 +107,6 @@ class LLMeterApp(App):
         self._refresh_in_progress = False
         self._refresh_queued = False
         self._last_refresh: datetime | None = None
-        self._theme_idx = 0
         self._refresh_timer = None
 
     def compose(self) -> ComposeResult:
@@ -144,6 +143,9 @@ class LLMeterApp(App):
     async def on_mount(self) -> None:
         interval = self._config.refresh_interval
         self.sub_title = f"v{__version__}  •  refresh every {self._refresh_interval_text()}"
+
+        if self._config.theme in self._themes:
+            self.theme = self._config.theme
 
         # Mount placeholder cards immediately
         await self._rebuild_provider_views()
@@ -287,8 +289,8 @@ class LLMeterApp(App):
         self._refresh_all()
 
     def action_cycle_theme(self) -> None:
-        self._theme_idx = (self._theme_idx + 1) % len(self._themes)
-        self.theme = self._themes[self._theme_idx]
+        self.theme = self._themes[(self._themes.index(self.theme) + 1) % len(self._themes)]
+        set_theme(self.theme)
         self.notify(f"Theme: {self.theme}", title="Theme", timeout=2)
 
     def action_show_help(self) -> None:

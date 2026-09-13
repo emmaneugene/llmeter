@@ -97,7 +97,7 @@ def run_snapshot(config, json_output: bool = False) -> None:
                 lines.append(f"  [dim]Plan: {p.identity.login_method}[/dim]")
 
         body = "\n".join(lines) if lines else "[dim]No data[/dim]"
-        console.print(Panel(body, title=title, border_style=p.color))
+        console.print(Panel(body, title=title))
 
     console.print()
 
