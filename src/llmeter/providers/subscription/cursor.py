@@ -193,6 +193,16 @@ def _parse_usage_response(
             period="Monthly",
         )
 
+    if result.secondary is None:
+        plan = individual.get("plan") or {}
+        try:
+            api_pct = float(plan.get("apiPercentUsed") or 0)
+        except (TypeError, ValueError):
+            api_pct = 0.0
+        if api_pct > 0:
+            result.secondary = RateWindow(used_percent=api_pct, resets_at=billing_end)
+            result.secondary_label = "Other Models"
+
     membership = data.get("membershipType")
     email = (user_data or {}).get("email")
     if membership or email:
@@ -221,6 +231,13 @@ def _parse_request_usage(request_data: dict | None) -> tuple[int, int | None]:
 
 
 def _calc_plan_percent(plan: dict) -> float:
+    raw = plan.get("totalPercentUsed")
+    if raw is not None:
+        try:
+            raw = float(raw)
+            return raw * 100 if raw <= 1 else raw
+        except (TypeError, ValueError):
+            pass
     try:
         plan_used_cents = float(plan.get("used") or 0)
     except (TypeError, ValueError):
@@ -231,13 +248,6 @@ def _calc_plan_percent(plan: dict) -> float:
         plan_limit_cents = 0.0
     if plan_limit_cents > 0:
         return (plan_used_cents / plan_limit_cents) * 100
-    raw = plan.get("totalPercentUsed")
-    if raw is not None:
-        try:
-            raw = float(raw)
-            return raw * 100 if raw <= 1 else raw
-        except (TypeError, ValueError):
-            pass
     return 0.0
 
 

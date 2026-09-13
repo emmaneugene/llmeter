@@ -312,6 +312,32 @@ class TestCursorUsageParsing:
 
         assert result.primary.used_percent == 65.0
 
+    def test_parse_prefers_total_percent_over_used_limit(self) -> None:
+        """used/limit report allowance accounting, not consumption."""
+        data = {
+            "individualUsage": {
+                "plan": {
+                    "used": 2000,
+                    "limit": 2000,
+                    "remaining": 0,
+                    "breakdown": {"included": 2000, "bonus": 2917, "total": 4917},
+                    "autoPercentUsed": 10.913333333333334,
+                    "apiPercentUsed": 0.26666666666666666,
+                    "totalPercentUsed": 10.406349206349207,
+                },
+                "onDemand": {"enabled": False, "used": 0, "limit": None},
+            },
+        }
+        result = self._make_result()
+        _parse_usage_response(data, None, None, result)
+
+        assert result.primary.used_percent == pytest.approx(10.406349206349207)
+        # on-demand disabled -> API bucket becomes the secondary row
+        assert result.secondary is not None
+        assert result.secondary.used_percent == pytest.approx(0.26666666666666666)
+        assert result.secondary_label == "Other Models"
+        assert result.cost is None
+
     def test_parse_empty_response(self) -> None:
         result = self._make_result()
         _parse_usage_response({}, None, None, result)
