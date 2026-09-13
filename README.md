@@ -35,6 +35,7 @@ There are a bunch of tools out there that do similar things, but none quite fit 
 | **OpenAI API**       | `openai-api`    | API usage    | API key    |
 | **Anthropic API**    | `anthropic-api` | API usage    | API key    |
 | **Opencode Zen**     | `opencode`      | API usage    | Cookie     |
+| **OpenRouter**       | `openrouter`    | API usage    | API key    |
 
 >     Note: Anthropic API spend data can lag 1 day behind real-time usage.
 
@@ -117,6 +118,7 @@ Provider entries in `providers` can include additional keys beyond `id` and `ena
 | `openai-api` | `monthly_budget` | number | Monthly USD budget used for spend percentage |
 | `anthropic-api` | `monthly_budget` | number | Monthly USD budget used for spend percentage |
 | `opencode` | `monthly_budget` | number | Optional override for platform monthly limit |
+| `openrouter` | `monthly_budget` | number | Monthly USD budget used for spend percentage when the key has no spend limit |
 
 Generate a default:
 

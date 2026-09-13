@@ -18,6 +18,7 @@ from .models import ProviderResult
 from .providers.api.anthropic import fetch_anthropic_api
 from .providers.api.openai import fetch_openai_api
 from .providers.api.opencode import fetch_opencode_api
+from .providers.api.openrouter import fetch_openrouter
 from .providers.subscription.claude import fetch_claude
 from .providers.subscription.codex import fetch_codex
 from .providers.subscription.copilot import fetch_copilot
@@ -199,6 +200,20 @@ PROVIDER_RUNTIMES: dict[str, ProviderRuntime] = {
             "opencode-zen",
             "✓ Removed OpenCode Zen auth cookie.",
             "No OpenCode Zen auth cookie stored.",
+        ),
+    ),
+    "openrouter": ProviderRuntime(
+        fetcher=fetch_openrouter,
+        auth_kind="api",
+        login_handler=_make_api_login(
+            "openrouter",
+            "OpenRouter API key (sk-or-...): ",
+            "✓ OpenRouter API key saved to auth.json.",
+        ),
+        logout_handler=_make_api_logout(
+            "openrouter",
+            "✓ Removed OpenRouter API key.",
+            "No OpenRouter API key stored.",
         ),
     ),
 }

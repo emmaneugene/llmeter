@@ -233,3 +233,27 @@ By default, the monthly cap is synced from the Opencode Zen platform's own `mont
 - The session cookie uses the `@hapi/iron` sealed format (`Fe26.2**…`), which embeds the expiry as a millisecond
   timestamp in the cookie itself. Cookies issued by opencode.ai currently expire after approximately one year. There is
   no refresh mechanism — a 401/403 means the user must supply a new cookie.
+
+---
+
+## OpenRouter
+
+**Auth:** OpenRouter API key (`sk-or-v1-...`). Run `llmeter --login openrouter` or set `OPENROUTER_API_KEY` env var.
+
+**Endpoints:**
+
+- `GET https://openrouter.ai/api/v1/key` — key usage and spend limit
+- `GET https://openrouter.ai/api/v1/credits` — purchased credits and lifetime usage
+
+**What is tracked:**
+
+- **Spend bar:** if the key has a spend `limit` set (dashboard → API Keys), usage vs that limit is shown as a % bar and
+  `$X.XX / $Y` label; `limit_remaining` self-tracks the key's reset period (daily/weekly/monthly). Without a key limit,
+  `monthly_budget` from config is used instead; with neither, only the raw dollar amount is shown
+- **Monthly spend:** `usage_monthly` in USD
+- **Credits:** remaining balance (`total_credits - total_usage`) in USD
+
+**Notes:**
+
+- Both endpoints are official and documented; a standard inference key is sufficient
+- The credits endpoint is best-effort — a failure there does not block the spend fetch

@@ -267,4 +267,11 @@ PROVIDERS: dict[str, ProviderMeta] = {
         color="#F5EFEA",
         primary_label="Monthly",
     ),
+    "openrouter": ProviderMeta(
+        id="openrouter",
+        name="OpenRouter",
+        icon="◇",
+        color="#6467F2",
+        primary_label="Spend",
+    ),
 }
