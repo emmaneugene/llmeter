@@ -95,6 +95,7 @@ class LLMeterApp(App):
     _themes = [
         "textual-dark", "textual-light", "monokai",
         "dracula", "nord", "tokyo-night",
+        "solarized-light", "catppuccin-latte",
     ]
 
     def __init__(self, config: AppConfig):
